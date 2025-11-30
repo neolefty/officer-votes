@@ -49,6 +49,8 @@ export interface RoundResult {
 export interface ElectionState {
   election: Election;
   participants: Participant[];
+  currentParticipantId: string;
+  isTeller: boolean;
   currentRound: Round | null;
   votedCount: number;
   totalParticipants: number;

@@ -1,11 +1,22 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
+import { drizzle as drizzleLibsql } from 'drizzle-orm/libsql';
+import { createClient } from '@libsql/client';
 import { sql } from 'drizzle-orm';
 
-const dbPath = process.env.DATABASE_URL || 'election.db';
-const sqlite = new Database(dbPath);
-const db = drizzle(sqlite);
+const tursoUrl = process.env.TURSO_DATABASE_URL;
+const tursoToken = process.env.TURSO_AUTH_TOKEN;
+
+let db: ReturnType<typeof drizzleSqlite> | ReturnType<typeof drizzleLibsql>;
+let cleanup: () => void = () => {};
+
+if (tursoUrl) {
+  db = drizzleLibsql(createClient({ url: tursoUrl, authToken: tursoToken }));
+} else {
+  const Database = require('better-sqlite3');
+  const sqlite = new Database(process.env.DATABASE_URL || 'election.db');
+  db = drizzleSqlite(sqlite);
+  cleanup = () => sqlite.close();
+}
 
 // Create tables directly (simpler than migrations for now)
 db.run(sql`
@@ -59,4 +70,4 @@ db.run(sql`
 `);
 
 console.log('Database tables created successfully');
-sqlite.close();
+cleanup();

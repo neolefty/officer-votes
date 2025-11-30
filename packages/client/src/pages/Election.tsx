@@ -72,18 +72,6 @@ export default function Election() {
     return null;
   }
 
-  const isTeller = state.participants.find(
-    (p) => state.voterStatus?.some((v) => v.participantId === p.id)
-  )
-    ? state.voterStatus !== undefined
-    : false;
-
-  // Actually determine teller status from voterStatus presence
-  const currentParticipant = state.participants.find((p) =>
-    // We need to identify current user - for now use voterStatus as proxy for teller
-    // This is a bit hacky, let's add participantId to state
-    true
-  );
 
   return (
     <div className="min-h-screen pb-20">
@@ -110,7 +98,7 @@ export default function Election() {
             <WaitingForResults
               state={state}
               round={state.currentRound}
-              isTeller={state.voterStatus !== undefined}
+              isTeller={state.isTeller}
             />
           ) : (
             <VotingRound
@@ -122,11 +110,11 @@ export default function Election() {
         ) : state.result ? (
           <RoundResults result={state.result} />
         ) : (
-          <Lobby state={state} isTeller={state.voterStatus !== undefined} />
+          <Lobby state={state} isTeller={state.isTeller} />
         )}
       </main>
 
-      {state.voterStatus !== undefined && !showLog && (
+      {state.isTeller && !showLog && (
         <TellerControls state={state} onAction={() => refetch()} />
       )}
     </div>

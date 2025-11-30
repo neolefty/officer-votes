@@ -70,6 +70,8 @@ export async function getElectionState(
       role: p.role,
       joinedAt: p.createdAt.toISOString(),
     })),
+    currentParticipantId: participant.id,
+    isTeller: participant.role === 'teller',
     currentRound: currentRound ? formatRound(currentRound) : null,
     votedCount,
     totalParticipants: participants.length,
