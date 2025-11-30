@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { trpc, setToken } from '../trpc';
 
 export default function Home() {
-  const [name, setName] = useState('');
+  const [electionName, setElectionName] = useState('');
+  const [yourName, setYourName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [mode, setMode] = useState<'create' | 'join' | null>(null);
   const [error, setError] = useState('');
@@ -27,14 +28,22 @@ export default function Home() {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    createMutation.mutate({ name: name.trim() });
+    if (!electionName.trim() || !yourName.trim()) return;
+    createMutation.mutate({ name: electionName.trim(), tellerName: yourName.trim() });
   };
 
   const handleJoin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !joinCode.trim()) return;
-    joinMutation.mutate({ code: joinCode.trim().toUpperCase(), name: name.trim() });
+    if (!yourName.trim() || !joinCode.trim()) return;
+    joinMutation.mutate({ code: joinCode.trim().toUpperCase(), name: yourName.trim() });
+  };
+
+  const resetForm = () => {
+    setMode(null);
+    setError('');
+    setElectionName('');
+    setYourName('');
+    setJoinCode('');
   };
 
   return (
@@ -62,28 +71,44 @@ export default function Home() {
         {mode === 'create' && (
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Election Name</label>
+              <label htmlFor="election-name" className="block text-sm font-medium mb-1">
+                Election Name
+              </label>
               <input
+                id="election-name"
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={electionName}
+                onChange={(e) => setElectionName(e.target.value)}
                 placeholder="e.g., Local Spiritual Assembly 2024"
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 autoFocus
               />
             </div>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            <div>
+              <label htmlFor="your-name-create" className="block text-sm font-medium mb-1">
+                Your Name
+              </label>
+              <input
+                id="your-name-create"
+                type="text"
+                value={yourName}
+                onChange={(e) => setYourName(e.target.value)}
+                placeholder="Enter your name"
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setMode(null); setError(''); }}
+                onClick={resetForm}
                 className="flex-1 py-3 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition"
               >
                 Back
               </button>
               <button
                 type="submit"
-                disabled={createMutation.isPending || !name.trim()}
+                disabled={createMutation.isPending || !electionName.trim() || !yourName.trim()}
                 className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
               >
                 {createMutation.isPending ? 'Creating...' : 'Create'}
@@ -95,8 +120,11 @@ export default function Home() {
         {mode === 'join' && (
           <form onSubmit={handleJoin} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Election Code</label>
+              <label htmlFor="join-code" className="block text-sm font-medium mb-1">
+                Election Code
+              </label>
               <input
+                id="join-code"
                 type="text"
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -107,27 +135,30 @@ export default function Home() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Your Name</label>
+              <label htmlFor="your-name-join" className="block text-sm font-medium mb-1">
+                Your Name
+              </label>
               <input
+                id="your-name-join"
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={yourName}
+                onChange={(e) => setYourName(e.target.value)}
                 placeholder="Enter your name"
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            {error && <p className="text-red-600 text-sm">{error}</p>}
+            {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
             <div className="flex gap-3">
               <button
                 type="button"
-                onClick={() => { setMode(null); setError(''); }}
+                onClick={resetForm}
                 className="flex-1 py-3 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition"
               >
                 Back
               </button>
               <button
                 type="submit"
-                disabled={joinMutation.isPending || !name.trim() || joinCode.length !== 6}
+                disabled={joinMutation.isPending || !yourName.trim() || joinCode.length !== 6}
                 className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50"
               >
                 {joinMutation.isPending ? 'Joining...' : 'Join'}

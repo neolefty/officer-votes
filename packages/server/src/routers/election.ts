@@ -41,7 +41,7 @@ export const electionRouter = router({
       await db.insert(schema.participants).values({
         id: participantId,
         electionId: id,
-        name: 'Teller', // Will be updated when they set their name
+        name: input.tellerName,
         role: 'teller',
         token,
         createdAt: now,
