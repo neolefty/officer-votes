@@ -1,4 +1,3 @@
-import { drizzle as drizzleSqlite } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzleLibsql } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
 import { sql } from 'drizzle-orm';
@@ -6,13 +5,14 @@ import { sql } from 'drizzle-orm';
 const tursoUrl = process.env.TURSO_DATABASE_URL;
 const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-let db: ReturnType<typeof drizzleSqlite> | ReturnType<typeof drizzleLibsql>;
+let db: any;
 let cleanup: () => void = () => {};
 
 if (tursoUrl) {
   db = drizzleLibsql(createClient({ url: tursoUrl, authToken: tursoToken }));
 } else {
-  const Database = require('better-sqlite3');
+  const { default: Database } = await import('better-sqlite3');
+  const { drizzle: drizzleSqlite } = await import('drizzle-orm/better-sqlite3');
   const sqlite = new Database(process.env.DATABASE_URL || 'election.db');
   db = drizzleSqlite(sqlite);
   cleanup = () => sqlite.close();

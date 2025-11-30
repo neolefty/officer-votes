@@ -16,15 +16,15 @@ COPY packages/shared ./packages/shared
 COPY tsconfig.json ./
 RUN pnpm --filter shared build
 
-# Build client
-FROM build-shared AS build-client
-COPY packages/client ./packages/client
-RUN pnpm --filter client build
-
-# Build server
+# Build server (client depends on server types)
 FROM build-shared AS build-server
 COPY packages/server ./packages/server
 RUN pnpm --filter server build
+
+# Build client (needs server for AppRouter type)
+FROM build-server AS build-client
+COPY packages/client ./packages/client
+RUN pnpm --filter client build
 
 # Production
 FROM base AS production
@@ -42,4 +42,4 @@ ENV NODE_ENV=production
 ENV PORT=8080
 EXPOSE 8080
 
-CMD ["node", "packages/server/dist/index.js"]
+CMD ["sh", "-c", "node packages/server/dist/db/migrate.js && node packages/server/dist/index.js"]
