@@ -110,7 +110,7 @@ export default function Election() {
         ) : state.result ? (
           <RoundResults result={state.result} />
         ) : (
-          <Lobby state={state} isTeller={state.isTeller} />
+          <Lobby state={state} isTeller={state.isTeller} onAction={() => refetch()} />
         )}
       </main>
 

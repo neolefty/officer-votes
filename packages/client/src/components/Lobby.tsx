@@ -1,14 +1,27 @@
 import { useState } from 'react';
+import { trpc } from '../trpc';
 import type { ElectionState } from '@officer-election/shared';
 
 interface LobbyProps {
   state: ElectionState;
   isTeller: boolean;
+  onAction: () => void;
 }
 
-export default function Lobby({ state, isTeller }: LobbyProps) {
+export default function Lobby({ state, isTeller, onAction }: LobbyProps) {
   const [showToast, setShowToast] = useState(false);
   const shareUrl = `${window.location.origin}/e/${state.election.code}`;
+
+  const promoteMutation = trpc.election.promoteToTeller.useMutation({
+    onSuccess: () => onAction(),
+  });
+
+  const stepDownMutation = trpc.election.stepDownAsTeller.useMutation({
+    onSuccess: () => onAction(),
+  });
+
+  const tellerCount = state.participants.filter((p) => p.role === 'teller').length;
+  const canStepDown = isTeller && tellerCount > 1;
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(shareUrl);
@@ -51,11 +64,30 @@ export default function Lobby({ state, isTeller }: LobbyProps) {
               className="flex items-center justify-between p-3 bg-white rounded-lg border"
             >
               <span>{p.name}</span>
-              {p.role === 'teller' && (
-                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                  Teller
-                </span>
-              )}
+              {p.role === 'teller' ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                    Teller
+                  </span>
+                  {p.id === state.currentParticipantId && canStepDown && (
+                    <button
+                      onClick={() => stepDownMutation.mutate()}
+                      disabled={stepDownMutation.isPending}
+                      className="text-xs text-gray-500 hover:text-gray-700 hover:underline disabled:opacity-50"
+                    >
+                      Step Down
+                    </button>
+                  )}
+                </div>
+              ) : isTeller ? (
+                <button
+                  onClick={() => promoteMutation.mutate({ participantId: p.id })}
+                  disabled={promoteMutation.isPending}
+                  className="text-xs text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50"
+                >
+                  Make Teller
+                </button>
+              ) : null}
             </div>
           ))}
         </div>

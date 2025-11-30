@@ -165,4 +165,33 @@ export const electionRouter = router({
 
       return { success: true };
     }),
+
+  stepDownAsTeller: tellerProcedure.mutation(async ({ ctx }) => {
+    // Ensure at least one teller remains
+    const tellers = await db.query.participants.findMany({
+      where: and(
+        eq(schema.participants.electionId, ctx.election.id),
+        eq(schema.participants.role, 'teller')
+      ),
+    });
+
+    if (tellers.length <= 1) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Cannot step down: you are the only teller',
+      });
+    }
+
+    await db
+      .update(schema.participants)
+      .set({ role: 'voter' })
+      .where(eq(schema.participants.id, ctx.participant.id));
+
+    sseManager.broadcast(ctx.election.id, 'participant_updated', {
+      id: ctx.participant.id,
+      role: 'voter',
+    });
+
+    return { success: true };
+  }),
 });
