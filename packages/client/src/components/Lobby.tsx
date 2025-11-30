@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { ElectionState } from '@officer-election/shared';
 
 interface LobbyProps {
@@ -6,11 +7,13 @@ interface LobbyProps {
 }
 
 export default function Lobby({ state, isTeller }: LobbyProps) {
+  const [showToast, setShowToast] = useState(false);
   const shareUrl = `${window.location.origin}/e/${state.election.code}`;
 
   const copyLink = async () => {
     await navigator.clipboard.writeText(shareUrl);
-    alert('Link copied!');
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 2000);
   };
 
   return (
@@ -62,6 +65,12 @@ export default function Lobby({ state, isTeller }: LobbyProps) {
         <p className="text-center text-gray-500 mt-8">
           Use the controls below to start a voting round
         </p>
+      )}
+
+      {showToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg">
+          Link copied!
+        </div>
       )}
     </div>
   );
