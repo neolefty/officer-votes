@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { trpc, getToken, setToken, clearToken } from '../trpc';
 import { useSSE } from '../hooks/useSSE';
@@ -14,6 +14,7 @@ export default function Election() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const [showLog, setShowLog] = useState(false);
+  const [showLobby, setShowLobby] = useState(false);
 
   const hasToken = !!getToken();
 
@@ -32,6 +33,14 @@ export default function Election() {
   );
 
   useSSE(hasToken ? code : undefined, handleSSEEvent);
+
+  // Close overlay views when a new round starts
+  useEffect(() => {
+    if (state?.currentRound) {
+      setShowLobby(false);
+      setShowLog(false);
+    }
+  }, [state?.currentRound?.id]);
 
   const handleJoined = (token: string) => {
     setToken(code!, token);
@@ -81,18 +90,49 @@ export default function Election() {
             <h1 className="font-semibold text-lg">{state.election.name}</h1>
             <p className="text-sm text-gray-500">Code: {state.election.code}</p>
           </div>
-          <button
-            onClick={() => setShowLog(!showLog)}
-            className="px-3 py-1.5 text-sm bg-gray-100 rounded-lg hover:bg-gray-200 transition"
-          >
-            {showLog ? 'Hide Log' : 'Election Log'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setShowLobby(false);
+                setShowLog(false);
+              }}
+              className={`px-3 py-1.5 text-sm rounded-lg transition ${
+                !showLobby && !showLog ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              Latest
+            </button>
+            <button
+              onClick={() => {
+                setShowLobby(!showLobby);
+                setShowLog(false);
+              }}
+              className={`px-3 py-1.5 text-sm rounded-lg transition ${
+                showLobby ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              Participants
+            </button>
+            <button
+              onClick={() => {
+                setShowLog(!showLog);
+                setShowLobby(false);
+              }}
+              className={`px-3 py-1.5 text-sm rounded-lg transition ${
+                showLog ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200'
+              }`}
+            >
+              Log
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
         {showLog ? (
           <ElectionLog roundLog={state.roundLog} onClose={() => setShowLog(false)} />
+        ) : showLobby ? (
+          <Lobby state={state} isTeller={state.isTeller} onAction={() => refetch()} />
         ) : state.currentRound ? (
           state.hasVoted ? (
             <WaitingForResults
