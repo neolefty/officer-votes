@@ -112,4 +112,4 @@ The project includes `cloudbuild.yaml` for Cloud Build deployment. Push to trigg
 
 ## License
 
-Private
+MIT - see [LICENSE](LICENSE)
