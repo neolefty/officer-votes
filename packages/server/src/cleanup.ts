@@ -10,21 +10,11 @@ export async function maybeCleanupExpired() {
   lastCleanup = now;
 
   try {
-    const expiredElections = await db.query.elections.findMany({
-      where: lt(schema.elections.expiresAt, new Date()),
-      columns: { id: true },
-    });
-
-    if (expiredElections.length === 0) return;
-
+    // Delete all expired elections in a single query
     // Cascade delete handles participants, rounds, votes, voteRecords
-    for (const election of expiredElections) {
-      await db.delete(schema.elections).where(
-        lt(schema.elections.expiresAt, new Date())
-      );
-    }
-
-    console.log(`Cleaned up ${expiredElections.length} expired elections`);
+    await db
+      .delete(schema.elections)
+      .where(lt(schema.elections.expiresAt, new Date()));
   } catch (err) {
     console.error('Cleanup error:', err);
   }

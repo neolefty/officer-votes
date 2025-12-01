@@ -1,16 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { trpc } from '../trpc';
-import type { ElectionState, DisclosureLevel } from '@officer-election/shared';
+import type { ElectionState, DisclosureLevel, VoteTally } from '@officer-election/shared';
 
 interface TellerControlsProps {
   state: ElectionState;
   onAction: () => void;
-}
-
-interface VoteTally {
-  candidateId: string | null;
-  candidateName: string | null;
-  count: number;
 }
 
 interface CloseVotingResult {

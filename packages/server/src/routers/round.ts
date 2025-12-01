@@ -11,7 +11,7 @@ import {
   CloseVotingSchema,
 } from '@officer-election/shared';
 import { sseManager } from '../sse.js';
-import { getElectionState } from '../utils.js';
+import { getElectionState, countVotes, buildTallies, hasMajority, getMajorityThreshold } from '../utils.js';
 
 export const roundRouter = router({
   start: tellerProcedure
@@ -183,27 +183,14 @@ export const roundRouter = router({
         where: eq(schema.participants.electionId, ctx.election.id),
       });
 
-      const voteCounts = new Map<string | null, number>();
-      for (const vote of votes) {
-        voteCounts.set(vote.candidateId, (voteCounts.get(vote.candidateId) || 0) + 1);
-      }
-
-      // Build tallies sorted by count descending
-      const tallies = Array.from(voteCounts.entries())
-        .map(([candidateId, count]) => ({
-          candidateId,
-          candidateName: candidateId
-            ? participants.find((p) => p.id === candidateId)?.name || 'Unknown'
-            : null,
-          count,
-        }))
-        .sort((a, b) => b.count - a.count);
+      const voteCounts = countVotes(votes);
+      const tallies = buildTallies(voteCounts, participants);
 
       // Calculate majority info
       const majorityBase = ctx.election.bodySize || votes.length;
-      const majorityThreshold = Math.floor(majorityBase / 2) + 1;
+      const majorityThreshold = getMajorityThreshold(majorityBase);
       const topCount = tallies[0]?.count || 0;
-      const hasMajority = topCount >= majorityThreshold;
+      const hasWon = hasMajority(topCount, majorityBase);
 
       // Broadcast that voting is closed (but not results)
       sseManager.broadcast(ctx.election.id, 'voting_closed', {
@@ -214,7 +201,7 @@ export const roundRouter = router({
         tallies,
         totalVotes: votes.length,
         majorityThreshold,
-        hasMajority,
+        hasMajority: hasWon,
         bodySize: ctx.election.bodySize,
       };
     }),
@@ -240,18 +227,11 @@ export const roundRouter = router({
           where: eq(schema.votes.roundId, input.roundId),
         });
 
-        const voteCounts = new Map<string | null, number>();
-        for (const vote of votes) {
-          const key = vote.candidateId;
-          voteCounts.set(key, (voteCounts.get(key) || 0) + 1);
-        }
-
-        // Use bodySize for majority calculation if set, otherwise use total votes cast
+        const voteCounts = countVotes(votes);
         const majorityBase = ctx.election.bodySize || votes.length;
         const topCount = Math.max(...voteCounts.values(), 0);
-        const hasMajority = topCount > majorityBase / 2;
 
-        if (!hasMajority) {
+        if (!hasMajority(topCount, majorityBase)) {
           const baseDesc = ctx.election.bodySize
             ? `${ctx.election.bodySize}-member body`
             : `${votes.length} votes cast`;

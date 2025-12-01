@@ -24,8 +24,7 @@ export default function Election() {
   });
 
   const handleSSEEvent = useCallback(
-    (event: string, data: unknown) => {
-      console.log('SSE event:', event, data);
+    (_event: string, _data: unknown) => {
       // Refetch state on any event
       refetch();
     },

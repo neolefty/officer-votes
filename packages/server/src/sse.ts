@@ -62,17 +62,6 @@ class SSEManager {
       client.res.write(payload);
     }
   }
-
-  // Send to specific participant
-  sendTo(electionId: string, participantId: string, event: string, data: unknown) {
-    const clients = this.clients.get(electionId) || [];
-    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-    for (const client of clients) {
-      if (client.participantId === participantId) {
-        client.res.write(payload);
-      }
-    }
-  }
 }
 
 export const sseManager = new SSEManager();

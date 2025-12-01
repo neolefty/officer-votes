@@ -2,6 +2,59 @@ import { eq, and, desc, sql } from 'drizzle-orm';
 import { db, schema } from './db/index.js';
 import type { ElectionState, RoundLogEntry, RoundResult, VoteTally } from '@officer-election/shared';
 
+/**
+ * Count votes by candidate, returning a Map of candidateId -> count
+ */
+export function countVotes(votes: { candidateId: string | null }[]): Map<string | null, number> {
+  const counts = new Map<string | null, number>();
+  for (const vote of votes) {
+    counts.set(vote.candidateId, (counts.get(vote.candidateId) || 0) + 1);
+  }
+  return counts;
+}
+
+/**
+ * Build sorted vote tallies from vote counts
+ */
+export function buildTallies(
+  voteCounts: Map<string | null, number>,
+  participants: { id: string; name: string }[]
+): VoteTally[] {
+  return Array.from(voteCounts.entries())
+    .map(([candidateId, count]) => ({
+      candidateId,
+      candidateName: candidateId
+        ? participants.find((p) => p.id === candidateId)?.name || 'Unknown'
+        : null,
+      count,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Check if the top vote count constitutes a majority.
+ * Majority = more than half of the base (> 50%).
+ */
+export function hasMajority(topCount: number, majorityBase: number): boolean {
+  return topCount > majorityBase / 2;
+}
+
+/**
+ * Get the majority threshold (minimum votes needed for majority).
+ */
+export function getMajorityThreshold(majorityBase: number): number {
+  return Math.floor(majorityBase / 2) + 1;
+}
+
+/**
+ * Filter tallies to only include top candidates (those with the highest count).
+ */
+export function getTopCandidates(tallies: VoteTally[]): VoteTally[] {
+  if (tallies.length === 0) return [];
+  const topCount = tallies[0].count;
+  return tallies.filter((t) => t.count === topCount);
+}
+
 export async function getElectionState(
   election: typeof schema.elections.$inferSelect,
   participant: typeof schema.participants.$inferSelect
@@ -104,26 +157,12 @@ async function getRoundResult(
     where: eq(schema.votes.roundId, round.id),
   });
 
-  const tallyMap = new Map<string | null, number>();
-  for (const vote of votes) {
-    const key = vote.candidateId;
-    tallyMap.set(key, (tallyMap.get(key) || 0) + 1);
-  }
+  const voteCounts = countVotes(votes);
+  let tallies = buildTallies(voteCounts, participants);
 
-  let tallies: VoteTally[] = Array.from(tallyMap.entries()).map(([candidateId, count]) => ({
-    candidateId,
-    candidateName: candidateId
-      ? participants.find((p) => p.id === candidateId)?.name || 'Unknown'
-      : null,
-    count,
-  }));
-
-  tallies.sort((a, b) => b.count - a.count);
-
-  // Apply disclosure level
-  if (round.disclosureLevel === 'top' && tallies.length > 0) {
-    const topCount = tallies[0].count;
-    tallies = tallies.filter((t) => t.count === topCount);
+  // Apply disclosure level - only show top candidates
+  if (round.disclosureLevel === 'top' || round.disclosureLevel === 'top_no_count') {
+    tallies = getTopCandidates(tallies);
   }
 
   return {

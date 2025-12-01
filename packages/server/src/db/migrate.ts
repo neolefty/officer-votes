@@ -1,11 +1,16 @@
 import { drizzle as drizzleLibsql } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 
 const tursoUrl = process.env.TURSO_DATABASE_URL;
 const tursoToken = process.env.TURSO_AUTH_TOKEN;
 
-let db: any;
+// Minimal interface for migration - both libsql and better-sqlite3 support this
+interface MigrationDb {
+  run(query: SQL): unknown;
+}
+
+let db: MigrationDb;
 let cleanup: () => void = () => {};
 
 if (tursoUrl) {
