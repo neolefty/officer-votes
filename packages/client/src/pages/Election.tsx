@@ -227,7 +227,7 @@ function WaitingForDisclosure({
       <div className="bg-gray-50 rounded-xl p-6">
         <p className="text-gray-600">
           {isTeller
-            ? 'Please select how to share results using the panel below.'
+            ? 'Voting has ended. Another teller is preparing to share the results...'
             : 'Voting has ended. The teller is preparing to share the results...'}
         </p>
       </div>

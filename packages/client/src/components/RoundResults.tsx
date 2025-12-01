@@ -5,11 +5,16 @@ interface RoundResultsProps {
 }
 
 export default function RoundResults({ result }: RoundResultsProps) {
-  const { round, tallies, totalVotes } = result;
+  const { round, tallies, totalVotes, hasMajority, majorityThreshold } = result;
 
   const topCount = tallies[0]?.count || 0;
   const topCandidates = tallies.filter((t) => t.count === topCount);
   const isTie = topCandidates.length > 1;
+
+  // Color scheme based on majority status
+  const bgColor = hasMajority ? 'bg-green-50' : 'bg-yellow-50';
+  const textColor = hasMajority ? 'text-green-700' : 'text-yellow-700';
+  const borderColor = hasMajority ? 'border-green-200' : 'border-yellow-200';
 
   return (
     <div className="text-center">
@@ -22,13 +27,13 @@ export default function RoundResults({ result }: RoundResultsProps) {
           <p className="text-sm text-gray-500 mt-2">{totalVotes} total votes cast</p>
         </div>
       ) : round.disclosureLevel === 'top' || round.disclosureLevel === 'top_no_count' ? (
-        <div className="bg-green-50 rounded-xl p-6">
+        <div className={`${bgColor} rounded-xl p-6`}>
           {isTie ? (
             <>
               <p className="text-lg mb-4">Tie between:</p>
               <div className="space-y-2">
                 {topCandidates.map((t) => (
-                  <div key={t.candidateId} className="text-2xl font-bold text-green-700">
+                  <div key={t.candidateId} className={`text-2xl font-bold ${textColor}`}>
                     {t.candidateName || 'Abstain'}
                   </div>
                 ))}
@@ -40,7 +45,7 @@ export default function RoundResults({ result }: RoundResultsProps) {
           ) : topCandidates[0] ? (
             <>
               <p className="text-lg mb-2">Top vote recipient:</p>
-              <p className="text-3xl font-bold text-green-700">
+              <p className={`text-3xl font-bold ${textColor}`}>
                 {topCandidates[0].candidateName || 'Abstain'}
               </p>
               {round.disclosureLevel === 'top' && (
@@ -50,6 +55,9 @@ export default function RoundResults({ result }: RoundResultsProps) {
           ) : (
             <p className="text-gray-600">No votes cast</p>
           )}
+          <p className="text-gray-500 mt-4 text-sm">
+            {hasMajority ? 'Majority achieved' : `No clear majority (${majorityThreshold} required)`}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -57,18 +65,21 @@ export default function RoundResults({ result }: RoundResultsProps) {
             <div
               key={t.candidateId || 'abstain'}
               className={`flex items-center justify-between p-4 rounded-lg ${
-                i === 0 ? 'bg-green-50 border-2 border-green-200' : 'bg-gray-50'
+                i === 0 ? `${bgColor} border-2 ${borderColor}` : 'bg-gray-50'
               }`}
             >
               <span className={i === 0 ? 'font-semibold' : ''}>
                 {t.candidateName || 'Abstain'}
               </span>
-              <span className={`font-bold ${i === 0 ? 'text-green-700' : 'text-gray-700'}`}>
+              <span className={`font-bold ${i === 0 ? textColor : 'text-gray-700'}`}>
                 {t.count} vote{t.count !== 1 ? 's' : ''}
               </span>
             </div>
           ))}
-          <p className="text-sm text-gray-500 mt-4">{totalVotes} total votes cast</p>
+          <p className="text-sm text-gray-500 mt-4">
+            {totalVotes} total votes cast ·{' '}
+            {hasMajority ? 'Majority achieved' : `No clear majority (${majorityThreshold} required)`}
+          </p>
         </div>
       )}
     </div>

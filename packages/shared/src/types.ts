@@ -41,10 +41,25 @@ export interface VoteTally {
   count: number;
 }
 
+export interface VoterStatus {
+  participantId: string;
+  hasVoted: boolean;
+}
+
+export interface CloseVotingResult {
+  tallies: VoteTally[];
+  totalVotes: number;
+  majorityThreshold: number;
+  hasMajority: boolean;
+  bodySize: number | null;
+}
+
 export interface RoundResult {
   round: Round;
   tallies: VoteTally[];
   totalVotes: number;
+  hasMajority: boolean;
+  majorityThreshold: number;
 }
 
 export interface ElectionState {
@@ -57,7 +72,7 @@ export interface ElectionState {
   votedCount: number;
   totalParticipants: number;
   hasVoted: boolean;
-  voterStatus?: { participantId: string; hasVoted: boolean }[];
+  voterStatus?: VoterStatus[];
   result?: RoundResult;
   roundLog: RoundLogEntry[];
 }

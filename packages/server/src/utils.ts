@@ -1,4 +1,4 @@
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { db, schema } from './db/index.js';
 import type { ElectionState, RoundLogEntry, RoundResult, VoteTally } from '@officer-election/shared';
 
@@ -106,7 +106,7 @@ export async function getElectionState(
   if (!currentRound && !pendingRound) {
     const revealedRound = rounds.find((r) => r.status === 'revealed');
     if (revealedRound) {
-      result = await getRoundResult(revealedRound, participants, participant.role === 'teller');
+      result = await getRoundResult(revealedRound, participants, participant.role === 'teller', election.bodySize);
     }
   }
 
@@ -115,7 +115,7 @@ export async function getElectionState(
   for (const round of completedRounds) {
     let logResult: RoundResult | null = null;
     if (round.status === 'revealed' && round.disclosureLevel !== 'none') {
-      logResult = await getRoundResult(round, participants, participant.role === 'teller');
+      logResult = await getRoundResult(round, participants, participant.role === 'teller', election.bodySize);
     }
     roundLog.push({ round: formatRound(round), result: logResult });
   }
@@ -151,7 +151,8 @@ export async function getElectionState(
 async function getRoundResult(
   round: typeof schema.rounds.$inferSelect,
   participants: (typeof schema.participants.$inferSelect)[],
-  isTeller: boolean
+  isTeller: boolean,
+  bodySize: number | null
 ): Promise<RoundResult> {
   const votes = await db.query.votes.findMany({
     where: eq(schema.votes.roundId, round.id),
@@ -159,6 +160,12 @@ async function getRoundResult(
 
   const voteCounts = countVotes(votes);
   let tallies = buildTallies(voteCounts, participants);
+
+  // Calculate majority based on bodySize if set, otherwise totalVotes
+  const majorityBase = bodySize ?? votes.length;
+  const topCount = tallies[0]?.count ?? 0;
+  const hasWinnerMajority = hasMajority(topCount, majorityBase);
+  const threshold = getMajorityThreshold(majorityBase);
 
   // Apply disclosure level - only show top candidates
   if (round.disclosureLevel === 'top' || round.disclosureLevel === 'top_no_count') {
@@ -169,6 +176,8 @@ async function getRoundResult(
     round: formatRound(round),
     tallies,
     totalVotes: votes.length,
+    hasMajority: hasWinnerMajority,
+    majorityThreshold: threshold,
   };
 }
 
