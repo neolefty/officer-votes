@@ -24,7 +24,7 @@ export default function JoinForm({ code, onJoined }: JoinFormProps) {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-2">Join Election</h1>
+        <h1 className="text-2xl font-bold text-center mb-2">Join Meeting</h1>
         <p className="text-center text-gray-500 mb-8">Code: {code.toUpperCase()}</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">

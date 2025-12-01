@@ -2,13 +2,14 @@ import { z } from 'zod';
 
 // Enums
 export const ParticipantRole = z.enum(['teller', 'voter']);
-export const RoundStatus = z.enum(['voting', 'revealed', 'cancelled']);
-export const DisclosureLevel = z.enum(['top', 'all', 'none']);
+export const RoundStatus = z.enum(['voting', 'closed', 'revealed', 'cancelled']);
+export const DisclosureLevel = z.enum(['top', 'top_no_count', 'all', 'none']);
 
 // Election
 export const CreateElectionSchema = z.object({
   name: z.string().min(1).max(200),
   tellerName: z.string().min(1).max(100),
+  bodySize: z.number().int().min(1).max(100).optional(),
 });
 
 export const JoinElectionSchema = z.object({
@@ -41,7 +42,15 @@ export const CancelRoundSchema = z.object({
   roundId: z.string(),
 });
 
+export const CloseVotingSchema = z.object({
+  roundId: z.string(),
+});
+
 // Teller actions
 export const PromoteToTellerSchema = z.object({
   participantId: z.string(),
+});
+
+export const SetBodySizeSchema = z.object({
+  bodySize: z.number().int().min(1).max(100).nullable(),
 });

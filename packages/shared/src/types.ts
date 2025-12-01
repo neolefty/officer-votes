@@ -14,6 +14,7 @@ export interface Election {
   id: string;
   code: string;
   name: string;
+  bodySize: number | null;
   createdAt: string;
   expiresAt: string;
 }
@@ -52,6 +53,7 @@ export interface ElectionState {
   currentParticipantId: string;
   isTeller: boolean;
   currentRound: Round | null;
+  pendingRound: Round | null; // Round where voting closed but results not yet shared
   votedCount: number;
   totalParticipants: number;
   hasVoted: boolean;

@@ -16,8 +16,16 @@ export async function getElectionState(
     orderBy: desc(schema.rounds.createdAt),
   });
 
-  const currentRound = rounds.find((r) => r.status === 'voting') || null;
-  const completedRounds = rounds.filter((r) => r.status !== 'voting');
+  // Most recent round is first (sorted by createdAt desc)
+  const mostRecentRound = rounds[0] || null;
+
+  // Active round = most recent round if it's still in progress (voting or closed)
+  // Old rounds stuck in 'closed' status are ignored
+  const isActiveStatus = mostRecentRound && (mostRecentRound.status === 'voting' || mostRecentRound.status === 'closed');
+  const currentRound = isActiveStatus && mostRecentRound.status === 'voting' ? mostRecentRound : null;
+  const pendingRound = isActiveStatus && mostRecentRound.status === 'closed' ? mostRecentRound : null;
+
+  const completedRounds = rounds.filter((r) => r.status === 'revealed' || r.status === 'cancelled');
 
   let votedCount = 0;
   let hasVoted = false;
@@ -40,10 +48,13 @@ export async function getElectionState(
     }
   }
 
-  // Get revealed round result if exists
-  const revealedRound = rounds.find((r) => r.status === 'revealed');
-  if (revealedRound) {
-    result = await getRoundResult(revealedRound, participants, participant.role === 'teller');
+  // Get the most recent revealed round result (for display on Latest tab)
+  // Only show if no active round is in progress
+  if (!currentRound && !pendingRound) {
+    const revealedRound = rounds.find((r) => r.status === 'revealed');
+    if (revealedRound) {
+      result = await getRoundResult(revealedRound, participants, participant.role === 'teller');
+    }
   }
 
   // Build round log
@@ -61,6 +72,7 @@ export async function getElectionState(
       id: election.id,
       code: election.code,
       name: election.name,
+      bodySize: election.bodySize,
       createdAt: election.createdAt.toISOString(),
       expiresAt: election.expiresAt.toISOString(),
     },
@@ -73,6 +85,7 @@ export async function getElectionState(
     currentParticipantId: participant.id,
     isTeller: participant.role === 'teller',
     currentRound: currentRound ? formatRound(currentRound) : null,
+    pendingRound: pendingRound ? formatRound(pendingRound) : null,
     votedCount,
     totalParticipants: participants.length,
     hasVoted,

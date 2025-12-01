@@ -96,7 +96,7 @@ export default function Election() {
                 setShowLobby(false);
                 setShowLog(false);
               }}
-              className={`px-3 py-1.5 text-sm rounded-lg transition ${
+              className={`px-4 py-3 sm:px-3 sm:py-1.5 text-sm rounded-lg transition ${
                 !showLobby && !showLog ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
@@ -107,7 +107,7 @@ export default function Election() {
                 setShowLobby(!showLobby);
                 setShowLog(false);
               }}
-              className={`px-3 py-1.5 text-sm rounded-lg transition ${
+              className={`px-4 py-3 sm:px-3 sm:py-1.5 text-sm rounded-lg transition ${
                 showLobby ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
@@ -118,7 +118,7 @@ export default function Election() {
                 setShowLog(!showLog);
                 setShowLobby(false);
               }}
-              className={`px-3 py-1.5 text-sm rounded-lg transition ${
+              className={`px-4 py-3 sm:px-3 sm:py-1.5 text-sm rounded-lg transition ${
                 showLog ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200'
               }`}
             >
@@ -147,6 +147,8 @@ export default function Election() {
               onVoted={() => refetch()}
             />
           )
+        ) : state.pendingRound ? (
+          <WaitingForDisclosure round={state.pendingRound} isTeller={state.isTeller} />
         ) : state.result ? (
           <RoundResults result={state.result} />
         ) : (
@@ -207,6 +209,29 @@ function WaitingForResults({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function WaitingForDisclosure({
+  round,
+  isTeller,
+}: {
+  round: Round;
+  isTeller: boolean;
+}) {
+  return (
+    <div className="text-center py-12">
+      <h2 className="text-xl font-semibold mb-2">Results: {round.office}</h2>
+      {round.description && <p className="text-gray-600 mb-6">{round.description}</p>}
+
+      <div className="bg-gray-50 rounded-xl p-6">
+        <p className="text-gray-600">
+          {isTeller
+            ? 'Please select how to share results using the panel below.'
+            : 'Voting has ended. The teller is preparing to share the results...'}
+        </p>
+      </div>
     </div>
   );
 }

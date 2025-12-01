@@ -5,6 +5,7 @@ import { trpc, setToken } from '../trpc';
 export default function Home() {
   const [electionName, setElectionName] = useState('');
   const [yourName, setYourName] = useState('');
+  const [bodySize, setBodySize] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [mode, setMode] = useState<'create' | 'join' | null>(null);
   const [error, setError] = useState('');
@@ -29,7 +30,12 @@ export default function Home() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!electionName.trim() || !yourName.trim()) return;
-    createMutation.mutate({ name: electionName.trim(), tellerName: yourName.trim() });
+    const size = bodySize.trim() ? parseInt(bodySize, 10) : undefined;
+    createMutation.mutate({
+      name: electionName.trim(),
+      tellerName: yourName.trim(),
+      bodySize: size && size >= 1 && size <= 100 ? size : undefined,
+    });
   };
 
   const handleJoin = (e: React.FormEvent) => {
@@ -43,6 +49,7 @@ export default function Home() {
     setError('');
     setElectionName('');
     setYourName('');
+    setBodySize('');
     setJoinCode('');
   };
 
@@ -57,29 +64,32 @@ export default function Home() {
               onClick={() => setMode('create')}
               className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
             >
-              Create New Election
+              Create New Meeting
             </button>
             <button
               onClick={() => setMode('join')}
               className="w-full py-3 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition"
             >
-              Join Existing Election
+              Join Existing Meeting
             </button>
           </div>
         )}
 
         {mode === 'create' && (
           <form onSubmit={handleCreate} className="space-y-4">
+            <p className="text-sm text-gray-600 mb-4">
+              A meeting is a session where you'll elect one or more officers (Chair, Secretary, etc.) You can designate additional tellers and hold multiple rounds of voting.
+            </p>
             <div>
               <label htmlFor="election-name" className="block text-sm font-medium mb-1">
-                Election Name
+                Meeting Name
               </label>
               <input
                 id="election-name"
                 type="text"
                 value={electionName}
                 onChange={(e) => setElectionName(e.target.value)}
-                placeholder="e.g., Local Spiritual Assembly 2024"
+                placeholder="e.g., LSA Officers 2024"
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 autoFocus
               />
@@ -96,6 +106,24 @@ export default function Home() {
                 placeholder="Enter your name"
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+            </div>
+            <div>
+              <label htmlFor="body-size" className="block text-sm font-medium mb-1">
+                Body Size <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                id="body-size"
+                type="number"
+                value={bodySize}
+                onChange={(e) => setBodySize(e.target.value)}
+                placeholder="e.g., 9 for LSA"
+                min="1"
+                max="100"
+                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Used to calculate majority. Leave blank to use participants count.
+              </p>
             </div>
             {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
             <div className="flex gap-3">
@@ -121,7 +149,7 @@ export default function Home() {
           <form onSubmit={handleJoin} className="space-y-4">
             <div>
               <label htmlFor="join-code" className="block text-sm font-medium mb-1">
-                Election Code
+                Meeting Code
               </label>
               <input
                 id="join-code"

@@ -8,6 +8,7 @@ import {
   VoteSchema,
   EndRoundSchema,
   CancelRoundSchema,
+  CloseVotingSchema,
 } from '@officer-election/shared';
 import { sseManager } from '../sse.js';
 import { getElectionState } from '../utils.js';
@@ -152,8 +153,8 @@ export const roundRouter = router({
       return { success: true };
     }),
 
-  end: tellerProcedure
-    .input(EndRoundSchema)
+  closeVoting: tellerProcedure
+    .input(CloseVotingSchema)
     .mutation(async ({ input, ctx }) => {
       const round = await db.query.rounds.findFirst({
         where: and(
@@ -164,7 +165,101 @@ export const roundRouter = router({
       });
 
       if (!round) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Round not found' });
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Round not found or not in voting status' });
+      }
+
+      // Update status to closed
+      await db
+        .update(schema.rounds)
+        .set({ status: 'closed' })
+        .where(eq(schema.rounds.id, input.roundId));
+
+      // Calculate vote tallies for teller
+      const votes = await db.query.votes.findMany({
+        where: eq(schema.votes.roundId, input.roundId),
+      });
+
+      const participants = await db.query.participants.findMany({
+        where: eq(schema.participants.electionId, ctx.election.id),
+      });
+
+      const voteCounts = new Map<string | null, number>();
+      for (const vote of votes) {
+        voteCounts.set(vote.candidateId, (voteCounts.get(vote.candidateId) || 0) + 1);
+      }
+
+      // Build tallies sorted by count descending
+      const tallies = Array.from(voteCounts.entries())
+        .map(([candidateId, count]) => ({
+          candidateId,
+          candidateName: candidateId
+            ? participants.find((p) => p.id === candidateId)?.name || 'Unknown'
+            : null,
+          count,
+        }))
+        .sort((a, b) => b.count - a.count);
+
+      // Calculate majority info
+      const majorityBase = ctx.election.bodySize || votes.length;
+      const majorityThreshold = Math.floor(majorityBase / 2) + 1;
+      const topCount = tallies[0]?.count || 0;
+      const hasMajority = topCount >= majorityThreshold;
+
+      // Broadcast that voting is closed (but not results)
+      sseManager.broadcast(ctx.election.id, 'voting_closed', {
+        roundId: input.roundId,
+      });
+
+      return {
+        tallies,
+        totalVotes: votes.length,
+        majorityThreshold,
+        hasMajority,
+        bodySize: ctx.election.bodySize,
+      };
+    }),
+
+  end: tellerProcedure
+    .input(EndRoundSchema)
+    .mutation(async ({ input, ctx }) => {
+      const round = await db.query.rounds.findFirst({
+        where: and(
+          eq(schema.rounds.id, input.roundId),
+          eq(schema.rounds.electionId, ctx.election.id),
+          eq(schema.rounds.status, 'closed')
+        ),
+      });
+
+      if (!round) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Round not found or voting not closed yet' });
+      }
+
+      // For top_no_count, verify there's a majority winner
+      if (input.disclosureLevel === 'top_no_count') {
+        const votes = await db.query.votes.findMany({
+          where: eq(schema.votes.roundId, input.roundId),
+        });
+
+        const voteCounts = new Map<string | null, number>();
+        for (const vote of votes) {
+          const key = vote.candidateId;
+          voteCounts.set(key, (voteCounts.get(key) || 0) + 1);
+        }
+
+        // Use bodySize for majority calculation if set, otherwise use total votes cast
+        const majorityBase = ctx.election.bodySize || votes.length;
+        const topCount = Math.max(...voteCounts.values(), 0);
+        const hasMajority = topCount > majorityBase / 2;
+
+        if (!hasMajority) {
+          const baseDesc = ctx.election.bodySize
+            ? `${ctx.election.bodySize}-member body`
+            : `${votes.length} votes cast`;
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: `Cannot use "top without count" without a majority (>${Math.floor(majorityBase / 2)} of ${baseDesc}). Please choose another disclosure option.`,
+          });
+        }
       }
 
       await db
@@ -188,16 +283,16 @@ export const roundRouter = router({
   cancel: tellerProcedure
     .input(CancelRoundSchema)
     .mutation(async ({ input, ctx }) => {
+      // Can cancel rounds in either 'voting' or 'closed' status
       const round = await db.query.rounds.findFirst({
         where: and(
           eq(schema.rounds.id, input.roundId),
-          eq(schema.rounds.electionId, ctx.election.id),
-          eq(schema.rounds.status, 'voting')
+          eq(schema.rounds.electionId, ctx.election.id)
         ),
       });
 
-      if (!round) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Round not found' });
+      if (!round || (round.status !== 'voting' && round.status !== 'closed')) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Round not found or already completed' });
       }
 
       await db

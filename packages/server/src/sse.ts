@@ -7,6 +7,26 @@ type SSEClient = {
 
 class SSEManager {
   private clients: Map<string, SSEClient[]> = new Map(); // electionId -> clients
+  private heartbeatInterval: NodeJS.Timeout | null = null;
+
+  constructor() {
+    this.startHeartbeat();
+  }
+
+  private startHeartbeat() {
+    // Send heartbeat to all clients every 30 seconds
+    this.heartbeatInterval = setInterval(() => {
+      for (const [, clients] of this.clients) {
+        for (const client of clients) {
+          try {
+            client.res.write(':heartbeat\n\n');
+          } catch {
+            // Client disconnected, will be cleaned up by close handler
+          }
+        }
+      }
+    }, 30000);
+  }
 
   addClient(electionId: string, participantId: string, res: Response) {
     res.writeHead(200, {

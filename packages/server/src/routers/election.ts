@@ -7,6 +7,7 @@ import {
   CreateElectionSchema,
   JoinElectionSchema,
   PromoteToTellerSchema,
+  SetBodySizeSchema,
   ELECTION_CODE_LENGTH,
   TOKEN_LENGTH,
   ELECTION_EXPIRY_DAYS,
@@ -32,6 +33,7 @@ export const electionRouter = router({
         id,
         code,
         name: input.name,
+        bodySize: input.bodySize ?? null,
         createdAt: now,
         expiresAt,
       });
@@ -194,4 +196,19 @@ export const electionRouter = router({
 
     return { success: true };
   }),
+
+  setBodySize: tellerProcedure
+    .input(SetBodySizeSchema)
+    .mutation(async ({ input, ctx }) => {
+      await db
+        .update(schema.elections)
+        .set({ bodySize: input.bodySize })
+        .where(eq(schema.elections.id, ctx.election.id));
+
+      sseManager.broadcast(ctx.election.id, 'election_updated', {
+        bodySize: input.bodySize,
+      });
+
+      return { success: true };
+    }),
 });

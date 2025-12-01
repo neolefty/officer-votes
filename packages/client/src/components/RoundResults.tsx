@@ -21,7 +21,7 @@ export default function RoundResults({ result }: RoundResultsProps) {
           <p className="text-gray-600">The teller has chosen not to disclose vote totals.</p>
           <p className="text-sm text-gray-500 mt-2">{totalVotes} total votes cast</p>
         </div>
-      ) : round.disclosureLevel === 'top' ? (
+      ) : round.disclosureLevel === 'top' || round.disclosureLevel === 'top_no_count' ? (
         <div className="bg-green-50 rounded-xl p-6">
           {isTie ? (
             <>
@@ -33,7 +33,9 @@ export default function RoundResults({ result }: RoundResultsProps) {
                   </div>
                 ))}
               </div>
-              <p className="text-gray-600 mt-4">Each with {topCount} votes</p>
+              {round.disclosureLevel === 'top' && (
+                <p className="text-gray-600 mt-4">Each with {topCount} votes</p>
+              )}
             </>
           ) : topCandidates[0] ? (
             <>
@@ -41,7 +43,9 @@ export default function RoundResults({ result }: RoundResultsProps) {
               <p className="text-3xl font-bold text-green-700">
                 {topCandidates[0].candidateName || 'Abstain'}
               </p>
-              <p className="text-gray-600 mt-2">{topCandidates[0].count} votes</p>
+              {round.disclosureLevel === 'top' && (
+                <p className="text-gray-600 mt-2">{topCandidates[0].count} votes</p>
+              )}
             </>
           ) : (
             <p className="text-gray-600">No votes cast</p>

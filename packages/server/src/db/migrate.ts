@@ -24,10 +24,18 @@ db.run(sql`
     id TEXT PRIMARY KEY,
     code TEXT NOT NULL UNIQUE,
     name TEXT NOT NULL,
+    body_size INTEGER,
     created_at INTEGER NOT NULL,
     expires_at INTEGER NOT NULL
   )
 `);
+
+// Add body_size column if it doesn't exist (for existing databases)
+try {
+  db.run(sql`ALTER TABLE elections ADD COLUMN body_size INTEGER`);
+} catch (e) {
+  // Column already exists, ignore
+}
 
 db.run(sql`
   CREATE TABLE IF NOT EXISTS participants (
@@ -46,11 +54,34 @@ db.run(sql`
     election_id TEXT NOT NULL REFERENCES elections(id) ON DELETE CASCADE,
     office TEXT NOT NULL,
     description TEXT,
-    status TEXT NOT NULL CHECK (status IN ('voting', 'revealed', 'cancelled')),
-    disclosure_level TEXT CHECK (disclosure_level IN ('top', 'all', 'none')),
+    status TEXT NOT NULL CHECK (status IN ('voting', 'closed', 'revealed', 'cancelled')),
+    disclosure_level TEXT CHECK (disclosure_level IN ('top', 'top_no_count', 'all', 'none')),
     created_at INTEGER NOT NULL
   )
 `);
+
+// Migration: Update rounds table to add 'closed' status to CHECK constraint
+// SQLite doesn't support ALTER CHECK, so we recreate the table
+try {
+  // Check if we need to migrate by trying to insert 'closed' status
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS rounds_new (
+      id TEXT PRIMARY KEY,
+      election_id TEXT NOT NULL REFERENCES elections(id) ON DELETE CASCADE,
+      office TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL CHECK (status IN ('voting', 'closed', 'revealed', 'cancelled')),
+      disclosure_level TEXT CHECK (disclosure_level IN ('top', 'top_no_count', 'all', 'none')),
+      created_at INTEGER NOT NULL
+    )
+  `);
+  db.run(sql`INSERT INTO rounds_new SELECT * FROM rounds`);
+  db.run(sql`DROP TABLE rounds`);
+  db.run(sql`ALTER TABLE rounds_new RENAME TO rounds`);
+  console.log('Migrated rounds table to support closed status');
+} catch (e) {
+  // Migration already done or not needed
+}
 
 db.run(sql`
   CREATE TABLE IF NOT EXISTS votes (
