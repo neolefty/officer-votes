@@ -7,6 +7,8 @@ export type {
   Participant,
   Round,
   VoteTally,
+  VoterStatus,
+  CloseVotingResult,
   RoundResult,
   ElectionState,
   RoundLogEntry,
