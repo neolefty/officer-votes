@@ -78,7 +78,7 @@ export default function Home() {
         {mode === 'create' && (
           <form onSubmit={handleCreate} className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
-              A meeting is a session where you'll elect one or more officers (Chair, Secretary, etc.) You can designate additional tellers and hold multiple rounds of voting.
+              A meeting is a session where you&apos;ll elect one or more officers (Chair, Secretary, etc.) You can designate additional tellers and hold multiple rounds of voting.
             </p>
             <div>
               <label htmlFor="election-name" className="block text-sm font-medium mb-1">
@@ -194,6 +194,73 @@ export default function Home() {
             </div>
           </form>
         )}
+      </div>
+
+      <div className="w-full max-w-md mt-12 pt-6 border-t border-gray-200">
+        <h2 className="text-sm font-medium text-gray-500 mb-4">Guidance & Resources</h2>
+
+        <div className="space-y-4 text-sm">
+          <div>
+            <h3 className="font-medium text-gray-700 mb-1">Bahá'í World Centre</h3>
+            <ul className="list-disc list-inside space-y-1 text-gray-600 ml-1">
+              <li>
+                <a
+                  href="https://www.bahai.org/library/authoritative-texts/compilations/sanctity-nature-bahai-elections/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  The Sanctity and Nature of Bahá'í Elections
+                </a>
+                <span className="text-gray-400 ml-1">(compilation)</span>
+              </li>
+              <li>
+                <a
+                  href="https://www.bahai.org/documents/the-universal-house-of-justice/regional-bahai-councils"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Regional Bahá'í Councils
+                </a>
+                <span className="text-gray-400 ml-1">(1997)</span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-medium text-gray-700 mb-1">US National Spiritual Assembly</h3>
+            <ul className="list-disc list-inside space-y-1 text-gray-600 ml-1">
+              <li>
+                <a
+                  href="https://www.bahai.us/community/glsa"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Guidelines for Local Spiritual Assemblies
+                </a>
+                <span className="text-gray-400 ml-1">(login required)</span>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <h3 className="font-medium text-gray-700 mb-1">TallyJ Election App</h3>
+            <ul className="list-disc list-inside space-y-1 text-gray-600 ml-1">
+              <li>
+                <a
+                  href="https://officers.tallyj.com/guidance"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Officer Election Guidance
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );
