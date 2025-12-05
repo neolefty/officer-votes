@@ -48,11 +48,13 @@ export function getMajorityThreshold(majorityBase: number): number {
 
 /**
  * Filter tallies to only include top candidates (those with the highest count).
+ * Excludes abstentions (candidateId === null) from being considered as "top".
  */
 export function getTopCandidates(tallies: VoteTally[]): VoteTally[] {
-  if (tallies.length === 0) return [];
-  const topCount = tallies[0].count;
-  return tallies.filter((t) => t.count === topCount);
+  const actualVotes = tallies.filter((t) => t.candidateId !== null);
+  if (actualVotes.length === 0) return [];
+  const topCount = actualVotes[0].count;
+  return actualVotes.filter((t) => t.count === topCount);
 }
 
 export async function getElectionState(
@@ -162,8 +164,10 @@ async function getRoundResult(
   let tallies = buildTallies(voteCounts, participants);
 
   // Calculate majority based on bodySize if set, otherwise totalVotes
+  // Use top non-abstention vote count for majority check (abstentions can't "win")
   const majorityBase = bodySize ?? votes.length;
-  const topCount = tallies[0]?.count ?? 0;
+  const actualVotes = tallies.filter((t) => t.candidateId !== null);
+  const topCount = actualVotes[0]?.count ?? 0;
   const hasWinnerMajority = hasMajority(topCount, majorityBase);
   const threshold = getMajorityThreshold(majorityBase);
 

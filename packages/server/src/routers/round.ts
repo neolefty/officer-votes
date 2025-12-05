@@ -186,10 +186,11 @@ export const roundRouter = router({
       const voteCounts = countVotes(votes);
       const tallies = buildTallies(voteCounts, participants);
 
-      // Calculate majority info
+      // Calculate majority info (excluding abstentions - they can't "win")
       const majorityBase = ctx.election.bodySize || votes.length;
       const majorityThreshold = getMajorityThreshold(majorityBase);
-      const topCount = tallies[0]?.count || 0;
+      const actualVotes = tallies.filter((t) => t.candidateId !== null);
+      const topCount = actualVotes[0]?.count || 0;
       const hasWon = hasMajority(topCount, majorityBase);
 
       // Broadcast that voting is closed (but not results)

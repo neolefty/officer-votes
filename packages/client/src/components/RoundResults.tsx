@@ -7,8 +7,10 @@ interface RoundResultsProps {
 export default function RoundResults({ result }: RoundResultsProps) {
   const { round, tallies, totalVotes, hasMajority, majorityThreshold } = result;
 
-  const topCount = tallies[0]?.count || 0;
-  const topCandidates = tallies.filter((t) => t.count === topCount);
+  // Exclude abstentions when determining top candidates (abstentions can't "win")
+  const actualVotes = tallies.filter((t) => t.candidateId !== null);
+  const topCount = actualVotes[0]?.count || 0;
+  const topCandidates = actualVotes.filter((t) => t.count === topCount);
   const isTie = topCandidates.length > 1;
 
   // Color scheme based on majority status
@@ -61,21 +63,24 @@ export default function RoundResults({ result }: RoundResultsProps) {
         </div>
       ) : (
         <div className="space-y-3">
-          {tallies.map((t, i) => (
-            <div
-              key={t.candidateId || 'abstain'}
-              className={`flex items-center justify-between p-4 rounded-lg ${
-                i === 0 ? `${bgColor} border-2 ${borderColor}` : 'bg-gray-50'
-              }`}
-            >
-              <span className={i === 0 ? 'font-semibold' : ''}>
-                {t.candidateName || 'Abstain'}
-              </span>
-              <span className={`font-bold ${i === 0 ? textColor : 'text-gray-700'}`}>
-                {t.count} vote{t.count !== 1 ? 's' : ''}
-              </span>
-            </div>
-          ))}
+          {tallies.map((t) => {
+            const isTop = t.candidateId !== null && t.count === topCount;
+            return (
+              <div
+                key={t.candidateId || 'abstain'}
+                className={`flex items-center justify-between p-4 rounded-lg ${
+                  isTop ? `${bgColor} border-2 ${borderColor}` : 'bg-gray-50'
+                }`}
+              >
+                <span className={isTop ? 'font-semibold' : ''}>
+                  {t.candidateName || 'Abstain'}
+                </span>
+                <span className={`font-bold ${isTop ? textColor : 'text-gray-700'}`}>
+                  {t.count} vote{t.count !== 1 ? 's' : ''}
+                </span>
+              </div>
+            );
+          })}
           <p className="text-sm text-gray-500 mt-4">
             {totalVotes} total votes cast ·{' '}
             {hasMajority ? 'Majority achieved' : `No clear majority (${majorityThreshold} required)`}

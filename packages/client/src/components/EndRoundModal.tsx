@@ -218,7 +218,8 @@ function TellerResultsView({ results }: { results: CloseVotingResult }) {
       </p>
       <div className="space-y-2">
         {results.tallies.map((t) => {
-          const isMajority = t.count >= results.majorityThreshold;
+          // Only actual candidates (not abstentions) can have majority
+          const isMajority = t.candidateId !== null && t.count >= results.majorityThreshold;
           return (
             <div key={t.candidateId || 'abstain'} className="flex items-center justify-between">
               <span className={isMajority ? 'font-medium' : ''}>{t.candidateName || 'Abstain'}</span>

@@ -34,7 +34,7 @@ export default function ElectionLog({ roundLog, onClose }: ElectionLogProps) {
       </div>
 
       <div className="space-y-4">
-        {roundLog.map((entry, i) => (
+        {roundLog.map((entry) => (
           <div key={entry.round.id} className="bg-white border rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-medium">{entry.round.office}</h3>
@@ -69,9 +69,11 @@ export default function ElectionLog({ roundLog, onClose }: ElectionLogProps) {
                   ))
                 ) : (
                   // top or top_no_count - show only top recipient(s)
+                  // Server already filters out abstentions, but be defensive
                   (() => {
-                    const topCount = entry.result.tallies[0]?.count || 0;
-                    const topCandidates = entry.result.tallies.filter((t) => t.count === topCount);
+                    const actualVotes = entry.result.tallies.filter((t) => t.candidateId !== null);
+                    const topCount = actualVotes[0]?.count || 0;
+                    const topCandidates = actualVotes.filter((t) => t.count === topCount);
                     return topCandidates.map((t) => (
                       <div
                         key={t.candidateId || 'abstain'}
