@@ -38,7 +38,7 @@ db.run(sql`
 // Add body_size column if it doesn't exist (for existing databases)
 try {
   db.run(sql`ALTER TABLE elections ADD COLUMN body_size INTEGER`);
-} catch (e) {
+} catch {
   // Column already exists, ignore
 }
 
@@ -84,7 +84,7 @@ try {
   db.run(sql`DROP TABLE rounds`);
   db.run(sql`ALTER TABLE rounds_new RENAME TO rounds`);
   console.log('Migrated rounds table to support closed status');
-} catch (e) {
+} catch {
   // Migration already done or not needed
 }
 

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { trpc, getToken, setToken, clearToken } from '../trpc';
 import { useSSE } from '../hooks/useSSE';
-import type { ElectionState, Participant, Round, RoundResult } from '@officer-election/shared';
+import type { ElectionState, Round } from '@officer-election/shared';
 import JoinForm from '../components/JoinForm';
 import Lobby from '../components/Lobby';
 import VotingRound from '../components/VotingRound';
@@ -23,13 +23,9 @@ export default function Election() {
     refetchInterval: false,
   });
 
-  const handleSSEEvent = useCallback(
-    (_event: string, _data: unknown) => {
-      // Refetch state on any event
-      refetch();
-    },
-    [refetch]
-  );
+  const handleSSEEvent = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
   useSSE(hasToken ? code : undefined, handleSSEEvent);
 
@@ -39,6 +35,7 @@ export default function Election() {
       setShowLobby(false);
       setShowLog(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only react to id changes
   }, [state?.currentRound?.id]);
 
   const handleJoined = (token: string) => {

@@ -201,7 +201,7 @@ export default function Home() {
 
         <div className="space-y-4 text-sm">
           <div>
-            <h3 className="font-medium text-gray-700 mb-1">Bahá'í World Centre</h3>
+            <h3 className="font-medium text-gray-700 mb-1">Bahá&apos;í World Centre</h3>
             <ul className="list-disc list-inside space-y-1 text-gray-600 ml-1">
               <li>
                 <a
@@ -210,7 +210,7 @@ export default function Home() {
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 hover:underline"
                 >
-                  The Sanctity and Nature of Bahá'í Elections
+                  The Sanctity and Nature of Bahá&apos;í Elections
                 </a>
                 <span className="text-gray-400 ml-1">(compilation)</span>
               </li>
@@ -221,7 +221,7 @@ export default function Home() {
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:text-blue-800 hover:underline"
                 >
-                  Regional Bahá'í Councils
+                  Regional Bahá&apos;í Councils
                 </a>
                 <span className="text-gray-400 ml-1">(1997)</span>
               </li>
