@@ -20,30 +20,18 @@ Shipped:
 
 Note: the plan called out three consumers; in practice only `RoundResults.tsx` needed narrowing. `EndRoundModal.tsx` reads `CloseVotingResult` (not `RoundResult`), and `ElectionLog.tsx` touches only shared fields. They'll likely take by-election copy in step 4.
 
-### 2. Schema + migration
+### 2. Schema + migration — **DONE**
 
-`packages/server/src/db/schema.ts` and `migrate.ts`. Follow the existing idempotent pattern (`ALTER TABLE ADD COLUMN` in try/catch, `CREATE TABLE IF NOT EXISTS`).
+Shipped:
 
-- `elections.election_type TEXT NOT NULL DEFAULT 'officer'`
-- `elections.vacancy_count INTEGER` (null for officer; default 1 on new by-elections)
-- `rounds.election_type TEXT NOT NULL DEFAULT 'officer'` (denormalized from parent)
-- `rounds.eligible_candidate_ids TEXT` (JSON-encoded `string[]` or null; null = full active roster)
-- New `candidates` table:
-  ```ts
-  candidates {
-    id: text PK,
-    electionId: text NOT NULL,           // FK -> elections.id, ON DELETE CASCADE
-    name: text NOT NULL,
-    displayOrder: integer NOT NULL,
-    removedAt: integer,                   // unix ms; null = active (soft-delete)
-    createdAt: integer NOT NULL,
-  }
-  ```
-- `CREATE INDEX candidates_election_idx ON candidates (election_id)`
+- **DB columns** (`packages/server/src/db/schema.ts`): `elections.election_type` (NOT NULL DEFAULT `'officer'`), `elections.vacancy_count` (nullable); `rounds.election_type` (denormalized, NOT NULL DEFAULT `'officer'`), `rounds.eligible_candidate_ids` (JSON-encoded text, nullable). Comment on `votes` documents that `candidateId` is interpreted against the parent round's `electionType`.
+- **`candidates` table** with `candidates_election_idx`, exactly per the spec.
+- **Migration** (`migrate.ts`): idempotent `ALTER TABLE … ADD COLUMN` in try/catch for the four new columns, `CREATE TABLE IF NOT EXISTS candidates`, `CREATE INDEX IF NOT EXISTS`. Verified against the populated dev DB — existing officer rows backfilled to `'officer'` automatically.
+- **Shared types** (`packages/shared/src/types.ts`): `Election` gains `electionType` + `vacancyCount`; `Round` gains `electionType` + `eligibleCandidateIds`; new `Candidate`. **Zod schemas** (`schemas.ts`): `ElectionType` enum; `CreateElectionSchema` + `electionType` (default `'officer'`) + `vacancyCount`; `StartRoundSchema` + `eligibleCandidateIds`; new `AddCandidateSchema`, `UpdateCandidateSchema`, `RemoveCandidateSchema`.
+- **`getRoundResult`** now reads `round.electionType` from the row instead of hardcoding it. By-election arm throws (`'by-election round results not yet implemented'`) so the officer branch narrows cleanly until step 4 fills it in. `formatRound` surfaces `electionType` + parses `eligibleCandidateIds` JSON. `getElectionState` includes `electionType` + `vacancyCount` in the election object.
+- **`round.ts:start`** got a minimal stub patch (`electionType: 'officer' as const, eligibleCandidateIds: null`) so the new `Round` shape typechecks. Real inheritance/validation is step 4.
 
-`votes.candidateId` is reused — interpret against parent `round.electionType` (officer → `participants.id`, by-election → `candidates.id`). Add a comment in `schema.ts` to that effect. No FK by design.
-
-**Done when:** migration runs cleanly on a populated dev DB; existing officer elections behave identically.
+Note: `election.ts:create` was *not* touched — Drizzle's column defaults make `electionType`/`vacancyCount` optional on insert. Step 3 will explicitly pass them through so users can actually create by-elections.
 
 ### 3. `candidate.ts` router + roster mutations
 
@@ -122,7 +110,7 @@ Pure, DB-free, fully unit-tested in `voting.test.ts`:
   ```
   Algorithm: drop abstentions and zero-counts; sort desc. ≤ `vacancyCount` candidates with votes → `decisive`. Strict gap at cutoff → `decisive` top N. Otherwise `tie` (decisiveWinners strictly above cutoff; tiedCandidates at cutoff, length ≥ 2). Throws on `vacancyCount < 1`.
 
-`getRoundResult` currently stamps `electionType: 'officer'` unconditionally (step 1). Once step 2 lands and `Round.electionType` exists, it will branch: officer = existing; by-election = `selection: selectWinners(tallies, vacancyCount)` + `vacancyCount`.
+`getRoundResult` reads `round.electionType` from the row (step 2). Officer arm = existing logic; by-election arm currently throws and lands in step 4 as `selection: selectWinners(tallies, vacancyCount)` + `vacancyCount`.
 
 ### Roster editability (the model)
 

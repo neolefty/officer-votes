@@ -82,6 +82,8 @@ export async function getElectionState(
       code: election.code,
       name: election.name,
       bodySize: election.bodySize,
+      electionType: election.electionType,
+      vacancyCount: election.vacancyCount,
       createdAt: election.createdAt.toISOString(),
       expiresAt: election.expiresAt.toISOString(),
     },
@@ -110,6 +112,11 @@ async function getRoundResult(
   isTeller: boolean,
   bodySize: number | null
 ): Promise<RoundResult> {
+  // By-election branch lands in step 4. Until then, narrow to officer.
+  if (round.electionType === 'by_election') {
+    throw new Error('by-election round results not yet implemented');
+  }
+
   const votes = await db.query.votes.findMany({
     where: eq(schema.votes.roundId, round.id),
   });
@@ -132,7 +139,7 @@ async function getRoundResult(
   }
 
   return {
-    electionType: 'officer',
+    electionType: round.electionType,
     round: formatRound(round),
     tallies,
     totalVotes: votes.length,
@@ -146,6 +153,10 @@ function formatRound(round: typeof schema.rounds.$inferSelect) {
     id: round.id,
     office: round.office,
     description: round.description,
+    electionType: round.electionType,
+    eligibleCandidateIds: round.eligibleCandidateIds
+      ? (JSON.parse(round.eligibleCandidateIds) as string[])
+      : null,
     status: round.status,
     disclosureLevel: round.disclosureLevel,
     createdAt: round.createdAt.toISOString(),

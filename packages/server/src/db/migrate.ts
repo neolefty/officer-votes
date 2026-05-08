@@ -105,5 +105,43 @@ db.run(sql`
   )
 `);
 
+// By-election support: add election_type + vacancy_count to elections
+try {
+  db.run(sql`ALTER TABLE elections ADD COLUMN election_type TEXT NOT NULL DEFAULT 'officer'`);
+} catch {
+  // Column already exists, ignore
+}
+try {
+  db.run(sql`ALTER TABLE elections ADD COLUMN vacancy_count INTEGER`);
+} catch {
+  // Column already exists, ignore
+}
+
+// By-election support: add election_type + eligible_candidate_ids to rounds
+try {
+  db.run(sql`ALTER TABLE rounds ADD COLUMN election_type TEXT NOT NULL DEFAULT 'officer'`);
+} catch {
+  // Column already exists, ignore
+}
+try {
+  db.run(sql`ALTER TABLE rounds ADD COLUMN eligible_candidate_ids TEXT`);
+} catch {
+  // Column already exists, ignore
+}
+
+// By-election candidate roster (separate from participants)
+db.run(sql`
+  CREATE TABLE IF NOT EXISTS candidates (
+    id TEXT PRIMARY KEY,
+    election_id TEXT NOT NULL REFERENCES elections(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    display_order INTEGER NOT NULL,
+    removed_at INTEGER,
+    created_at INTEGER NOT NULL
+  )
+`);
+
+db.run(sql`CREATE INDEX IF NOT EXISTS candidates_election_idx ON candidates (election_id)`);
+
 console.log('Database tables created successfully');
 cleanup();

@@ -44,10 +44,15 @@ export const roundRouter = router({
         createdAt: now,
       });
 
+      // electionType + eligibleCandidateIds: step 4 will inherit/validate from
+      // the parent election; for now mirror the DB defaults so existing officer
+      // flows continue unchanged.
       const round = {
         id: roundId,
         office: input.office,
         description: input.description || null,
+        electionType: 'officer' as const,
+        eligibleCandidateIds: null,
         status: 'voting' as const,
         disclosureLevel: null,
         createdAt: now.toISOString(),

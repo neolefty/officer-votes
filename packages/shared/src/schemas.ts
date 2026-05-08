@@ -4,12 +4,15 @@ import { z } from 'zod';
 export const ParticipantRole = z.enum(['teller', 'voter']);
 export const RoundStatus = z.enum(['voting', 'closed', 'revealed', 'cancelled']);
 export const DisclosureLevel = z.enum(['top', 'top_no_count', 'all', 'none']);
+export const ElectionType = z.enum(['officer', 'by_election']);
 
 // Election
 export const CreateElectionSchema = z.object({
   name: z.string().min(1).max(200),
   tellerName: z.string().min(1).max(100),
   bodySize: z.number().int().min(1).max(100).optional(),
+  electionType: ElectionType.default('officer'),
+  vacancyCount: z.number().int().min(1).max(20).optional(),
 });
 
 export const JoinElectionSchema = z.object({
@@ -26,6 +29,7 @@ export const GetElectionSchema = z.object({
 export const StartRoundSchema = z.object({
   office: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
+  eligibleCandidateIds: z.array(z.string()).optional(),
 });
 
 export const VoteSchema = z.object({
@@ -53,4 +57,18 @@ export const PromoteToTellerSchema = z.object({
 
 export const SetBodySizeSchema = z.object({
   bodySize: z.number().int().min(1).max(100).nullable(),
+});
+
+// Candidates (by-election roster)
+export const AddCandidateSchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+export const UpdateCandidateSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1).max(100),
+});
+
+export const RemoveCandidateSchema = z.object({
+  id: z.string(),
 });

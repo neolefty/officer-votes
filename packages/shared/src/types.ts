@@ -3,6 +3,7 @@ import type {
   ParticipantRole as ParticipantRoleSchema,
   RoundStatus as RoundStatusSchema,
   DisclosureLevel as DisclosureLevelSchema,
+  ElectionType as ElectionTypeSchema,
 } from './schemas.js';
 import type { WinnerSelection } from './voting.js';
 
@@ -10,12 +11,15 @@ import type { WinnerSelection } from './voting.js';
 export type ParticipantRole = z.infer<typeof ParticipantRoleSchema>;
 export type RoundStatus = z.infer<typeof RoundStatusSchema>;
 export type DisclosureLevel = z.infer<typeof DisclosureLevelSchema>;
+export type ElectionType = z.infer<typeof ElectionTypeSchema>;
 
 export interface Election {
   id: string;
   code: string;
   name: string;
   bodySize: number | null;
+  electionType: ElectionType;
+  vacancyCount: number | null;
   createdAt: string;
   expiresAt: string;
 }
@@ -31,8 +35,19 @@ export interface Round {
   id: string;
   office: string;
   description: string | null;
+  electionType: ElectionType;
+  eligibleCandidateIds: string[] | null;
   status: RoundStatus;
   disclosureLevel: DisclosureLevel | null;
+  createdAt: string;
+}
+
+export interface Candidate {
+  id: string;
+  electionId: string;
+  name: string;
+  displayOrder: number;
+  removedAt: number | null;
   createdAt: string;
 }
 
