@@ -38,13 +38,22 @@ Note: `election.ts:create` was *not* touched — Drizzle's column defaults make 
 New file `packages/server/src/routers/candidate.ts`, mounted in `routers/index.ts`. No status-based hard lock — mutations allowed regardless of round state.
 
 - `list` (authedProcedure) → all rows including soft-deleted, sorted by `displayOrder`. Client filters to active for input UIs; uses full set to resolve historical names.
-- `add` (tellerProcedure) → `{ name }`. Trim, reject empty. `displayOrder = MAX + 1`.
-- `update` (tellerProcedure) → `{ id, name }`. Trim, reject empty. Allowed even when `removedAt` is set (typo fix on historical name).
+- `add` (tellerProcedure) → `{ name }`. Trim, reject empty. Reject if any **active** candidate already has the same case-insensitive name (soft-deleted rows don't count — re-adding a removed name is fine). `displayOrder = MAX + 1`.
+- `update` (tellerProcedure) → `{ id, name }`. Trim, reject empty. Same case-insensitive uniqueness check, scoped to active candidates other than the row being updated (so re-casing your own name is fine). Allowed even when `removedAt` is set (typo fix on historical name).
 - `remove` (tellerProcedure) → `{ id }`. Soft-delete (set `removedAt = Date.now()`). Hard-delete only if no votes reference the row.
 
-Broadcast `roster_updated` SSE event after each mutation, to **both tellers and voters**.
+Broadcast `roster_updated` SSE event after each mutation, to **both tellers and voters**. Payload is the **full roster snapshot** (all rows including soft-deleted) so clients replace state wholesale — no reducer logic, no drift if an event is missed.
 
-Update `election.ts`: `create` persists `electionType` + `vacancyCount`; `getElectionState` returns `electionType`, `vacancyCount`, and `candidates: Candidate[]` (only populated for by-elections).
+Update `election.ts`: `create` persists `electionType` + `vacancyCount` (default `vacancyCount = 1` server-side when `electionType === 'by_election'` and the client didn't supply one). Refactor the shared `Election` type into a **discriminated union by `electionType`**:
+
+```ts
+type Election = ElectionBase & (
+  | { electionType: 'officer';     vacancyCount: null }
+  | { electionType: 'by_election'; vacancyCount: number; candidates: Candidate[] }
+);
+```
+
+Officer arm has no `candidates` field — voter pool is `participants`. By-election arm guarantees both `vacancyCount: number` (no `| null`) and `candidates: Candidate[]`. `getElectionState` builds the correct arm from the row plus a candidates query (officer mode skips the query). The DB row stays flat — the union is the response shape only.
 
 **Done when:** tellers can add/edit/remove candidates and voters' lists update live via SSE.
 
@@ -83,7 +92,9 @@ Update `election.ts`: `create` persists `electionType` + `vacancyCount`; `getEle
 ```ts
 // types.ts
 ElectionType = z.enum(['officer', 'by_election'])
-Election: + electionType, vacancyCount
+Election:  discriminated union by electionType (refactored in step 3)
+             officer     → { ..., vacancyCount: null }
+             by_election → { ..., vacancyCount: number, candidates: Candidate[] }
 Round:    + electionType, eligibleCandidateIds: string[] | null
 Candidate: { id, electionId, name, displayOrder, removedAt: number | null, createdAt }
 RoundResult: discriminated union by electionType (see step 1)
