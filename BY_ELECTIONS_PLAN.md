@@ -56,31 +56,32 @@ Shipped:
 
 Note: no server-side guard yet against calling `candidate.*` on an officer election. Step 4 will add the `electionType === 'by_election'` guard alongside the round-level branching, since that's where it's actually consumed.
 
-### 4. `round.ts` branching + UI
+### 4. `round.ts` branching + UI — **DONE**
 
-#### Server: `round.ts`
+Shipped:
 
-- `start`: inherit `electionType` from election. Accept optional `eligibleCandidateIds`; validate each ID is in this election's active roster. Default null for by-elections without it.
-- `vote`: branch on `round.electionType`. Officer → validate `candidateId` is a participant. By-election → validate it's an active candidate, and if `eligibleCandidateIds` is non-null, validate membership. Abstain (`null`) accepted in both. Reject removed candidates with "this candidate is no longer eligible" so client can refresh.
-- `closeVoting`: officer = existing. By-election = build tallies via candidates map, call `selectWinners`, drop majority enforcement.
-- `end`: officer = existing `top_no_count` majority guard. By-election = all disclosure levels unconditionally available.
+#### Server
+
+- **`round.ts:start`** inherits `electionType` from `ctx.election`, validates `eligibleCandidateIds` against the active roster (rejects with `BAD_REQUEST` if any ID is removed/not in this election), persists JSON-encoded array to `rounds.eligibleCandidateIds`. Rejects `eligibleCandidateIds` on officer rounds.
+- **`round.ts:vote`** branches on `round.electionType`. Officer → existing `participants` lookup. By-election → checks `candidates` table; rejects soft-deleted as "this candidate is no longer eligible"; if `round.eligibleCandidateIds` is non-null, validates membership. Abstain (`null`) still accepted in both modes.
+- **`round.ts:closeVoting`** now returns the discriminated `CloseVotingResult`. Officer arm = existing majority calc. By-election arm = builds tallies against the candidates table and runs `selectWinners(tallies, vacancyCount)`.
+- **`round.ts:end`** scopes the `top_no_count` majority guard to officer rounds only. By-elections accept any disclosure unconditionally.
+- **`utils.ts:getRoundResult`** by-election arm: loads candidates **including soft-deleted** for name resolution, runs `selectWinners`, returns `{ electionType: 'by_election', selection, vacancyCount, tallies, ... }`. Disclosure filtering: `top`/`top_no_count` shrinks `tallies` to just the candidates surfaced by `selection`; `top_no_count` additionally zeros vote counts in the `selection` payload so they don't leak to non-tellers. Signature changed: now takes the full `election` row instead of just `bodySize`, since by-elections need `vacancyCount`.
+- **`CloseVotingResult`** in `packages/shared/src/types.ts` is now a discriminated union by `electionType`. Officer arm carries `majorityThreshold`/`hasMajority`/`bodySize`; by-election arm carries `selection`/`vacancyCount`.
 
 #### Client
 
-- **`Home.tsx`**: radio for "Officer election" / "By-election (fill a vacancy)". When by-election: hide `bodySize`, hard-code `vacancyCount = 1`.
-- **`Lobby.tsx` + new `CandidateRoster.tsx`**: mount under "Participants" tab when `electionType === 'by_election'`. Both tellers and voters use it; gate edit affordances on `isTeller`. Tellers see inline rename, soft-delete, "Add candidate" input. During `voting` status: show "Voting is open — changes will appear to voters live" banner; `add`/`remove` require a confirmation tap; `update` (typo fix) is one tap.
-- **`StartRoundModal.tsx`**: take `electionType` prop. By-election → relabel "Office / Position" as "Round name." Default fresh round: `"Vote for vacancy"`. Default runoff (launched from tie CTA): `"Runoff: Alice vs. Bob"` (2 tied) / `"Runoff: Alice, Bob, Carol"` (3+). Always editable. When pre-filled from a tie, show read-only "Restricted to: Alice, Bob" line.
-- **`VotingRound.tsx`**: by-election → render buttons from `state.candidates`, filtered to active and intersected with `round.eligibleCandidateIds` if set. "Abstain" stays in both modes.
-- **`EndRoundModal.tsx`**: narrow on `result.electionType`. By-election → switch on `result.selection.outcome`:
-  - `decisive` → "Elected: <names>"
-  - `tie` → "Tied — runoff required" + "Start runoff round" CTA. CTA opens `StartRoundModal` with `eligibleCandidateIds = result.selection.tiedCandidates.map(t => t.candidateId)` and auto-generated name.
-  - `no_votes` → "No votes cast"
-  Drop the `top_no_count` "requires majority" gate and the "No majority reached" message in by-election mode.
-- **`RoundResults.tsx`**: by-election copy off `result.selection.outcome`, no majority line. For runoff rounds, show "Runoff between Alice and Bob." above the tally.
-- **`ElectionLog.tsx`**: in by-election rows, label "Top:" → "Elected:".
-- **`Election.tsx` + `TellerControls.tsx`**: plumb `electionType`, `candidates`, `eligibleCandidateIds` down.
+- **`Home.tsx`**: radio for "Officer election" / "By-election (fill a vacancy)". By-election hides `bodySize` and hardcodes `vacancyCount: 1` on submit. Placeholder text differs per mode.
+- **`CandidateRoster.tsx`** (new): teller add/rename/soft-delete (with confirmation prompts during open voting); voters see read-only list. Removed candidates collapsed under a `<details>` block. Voting-active banner ("changes will appear to voters live"). Mounted in `Lobby.tsx` only when `state.election.electionType === 'by_election'`. The Body Size panel is now hidden for by-elections.
+- **`StartRoundModal.tsx`**: takes `electionType` and optional `runoff: { candidateNames, candidateIds }`. Defaults: officer = blank field "Office / Position"; by-election fresh = "Vote for vacancy"; by-election runoff = `"Runoff: Alice vs. Bob"` for 2 / `"Runoff: Alice, Bob, Carol"` for 3+. When `runoff` is set, shows "Restricted to: Alice, Bob" panel and sends `eligibleCandidateIds` on submit.
+- **`VotingRound.tsx`**: now takes the full `state` and computes its own option list. Officer = participants. By-election = `state.election.candidates` filtered to active, intersected with `round.eligibleCandidateIds` when set. Runoff banner above the candidate list when applicable. Renders empty-state copy when no eligible candidates exist.
+- **`EndRoundModal.tsx`**: teller results view branches on `results.electionType`. Officer view unchanged; by-election view tags rows as "Elected"/"Tied" off `selection`, no majority line. Default disclosure: officer = top_no_count when majority/top otherwise, by-election = top. New `onTieRunoff` callback fires after a successful `end` when the by-election outcome was a tie, so `TellerControls` can open `StartRoundModal` pre-filled. Disclosure copy adapts ("winner(s)" vs "top recipient(s)") and the by-election arm doesn't gate `top_no_count`.
+- **`TellerControls.tsx`**: plumbs `electionType` and runoff-prefill state. After a tie, `EndRoundModal` closes and `StartRoundModal` opens automatically with the tied roster pre-filled.
+- **`RoundResults.tsx`**: split into officer vs. by-election renderers. By-election renders `selection.outcome` as "Elected: …" / "Tied — runoff required for N seat(s): …" / "No votes cast.", with optional vote counts gated on `disclosureLevel === 'top'`. Runoff badge above the tally.
+- **`ElectionLog.tsx`**: per-row "Runoff" badge for by-election runoff rounds. Disclosed-rounds body uses "Elected" / "Tied (runoff required)" labels for by-election entries instead of the officer top-recipient layout.
+- **`Election.tsx`**: plumbing only — passes `state` (instead of `participants`) into `VotingRound`.
 
-**Done when:** can run a full by-election end-to-end including a tied-runoff cycle, with live roster edits during an open vote.
+**Verified:** `pnpm build` clean across all three packages, `pnpm test` 30/30 voting tests pass, `pnpm lint` clean.
 
 ---
 

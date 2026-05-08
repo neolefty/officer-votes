@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { trpc } from '../trpc';
 import type { ElectionState } from '@officer-election/shared';
+import CandidateRoster from './CandidateRoster';
 
 interface LobbyProps {
   state: ElectionState;
@@ -176,7 +177,16 @@ export default function Lobby({ state, isTeller, onAction }: LobbyProps) {
         </div>
       </div>
 
-      {isTeller && (
+      {state.election.electionType === 'by_election' && (
+        <CandidateRoster
+          candidates={state.election.candidates}
+          isTeller={isTeller}
+          votingActive={state.currentRound !== null}
+          onAction={onAction}
+        />
+      )}
+
+      {isTeller && state.election.electionType === 'officer' && (
         <div className="bg-gray-50 rounded-xl p-4 mt-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>

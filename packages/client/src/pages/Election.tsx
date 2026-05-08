@@ -138,8 +138,8 @@ export default function Election() {
             />
           ) : (
             <VotingRound
+              state={state}
               round={state.currentRound}
-              participants={state.participants}
               onVoted={() => refetch()}
             />
           )

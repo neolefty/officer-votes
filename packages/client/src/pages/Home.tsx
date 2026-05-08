@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { trpc, setToken } from '../trpc';
+import type { ElectionType } from '@officer-election/shared';
 
 export default function Home() {
   const [electionName, setElectionName] = useState('');
   const [yourName, setYourName] = useState('');
   const [bodySize, setBodySize] = useState('');
+  const [electionType, setElectionType] = useState<ElectionType>('officer');
   const [joinCode, setJoinCode] = useState('');
   const [mode, setMode] = useState<'create' | 'join' | null>(null);
   const [error, setError] = useState('');
@@ -30,10 +32,20 @@ export default function Home() {
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!electionName.trim() || !yourName.trim()) return;
+    if (electionType === 'by_election') {
+      createMutation.mutate({
+        name: electionName.trim(),
+        tellerName: yourName.trim(),
+        electionType: 'by_election',
+        vacancyCount: 1,
+      });
+      return;
+    }
     const size = bodySize.trim() ? parseInt(bodySize, 10) : undefined;
     createMutation.mutate({
       name: electionName.trim(),
       tellerName: yourName.trim(),
+      electionType: 'officer',
       bodySize: size && size >= 1 && size <= 100 ? size : undefined,
     });
   };
@@ -50,6 +62,7 @@ export default function Home() {
     setElectionName('');
     setYourName('');
     setBodySize('');
+    setElectionType('officer');
     setJoinCode('');
   };
 
@@ -78,8 +91,43 @@ export default function Home() {
         {mode === 'create' && (
           <form onSubmit={handleCreate} className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
-              A meeting is a session where you&apos;ll elect one or more officers (Chair, Secretary, etc.) You can designate additional tellers and hold multiple rounds of voting.
+              A meeting is a session where you&apos;ll elect one or more officers (Chair, Secretary, etc.) or fill a vacancy by by-election. You can designate additional tellers and hold multiple rounds of voting.
             </p>
+            <fieldset className="space-y-2">
+              <legend className="block text-sm font-medium mb-1">Meeting Type</legend>
+              <label className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition ${
+                electionType === 'officer' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="election-type"
+                  value="officer"
+                  checked={electionType === 'officer'}
+                  onChange={() => setElectionType('officer')}
+                  className="mt-1"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium">Officer election</span>
+                  <span className="block text-gray-500">Elect officers (Chair, Secretary, etc.) from the assembly. Majority required.</span>
+                </span>
+              </label>
+              <label className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition ${
+                electionType === 'by_election' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <input
+                  type="radio"
+                  name="election-type"
+                  value="by_election"
+                  checked={electionType === 'by_election'}
+                  onChange={() => setElectionType('by_election')}
+                  className="mt-1"
+                />
+                <span className="text-sm">
+                  <span className="block font-medium">By-election (fill a vacancy)</span>
+                  <span className="block text-gray-500">Top vote-getter wins. Tellers manage the candidate roster.</span>
+                </span>
+              </label>
+            </fieldset>
             <div>
               <label htmlFor="election-name" className="block text-sm font-medium mb-1">
                 Meeting Name
@@ -89,7 +137,7 @@ export default function Home() {
                 type="text"
                 value={electionName}
                 onChange={(e) => setElectionName(e.target.value)}
-                placeholder="e.g., LSA Officers 2024"
+                placeholder={electionType === 'by_election' ? 'e.g., By-election for LSA vacancy' : 'e.g., LSA Officers 2024'}
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 autoFocus
               />
@@ -107,24 +155,26 @@ export default function Home() {
                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
-            <div>
-              <label htmlFor="body-size" className="block text-sm font-medium mb-1">
-                Body Size <span className="text-gray-400 font-normal">(optional)</span>
-              </label>
-              <input
-                id="body-size"
-                type="number"
-                value={bodySize}
-                onChange={(e) => setBodySize(e.target.value)}
-                placeholder="e.g., 9 for LSA"
-                min="1"
-                max="100"
-                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Used to calculate majority. Leave blank to use participants count.
-              </p>
-            </div>
+            {electionType === 'officer' && (
+              <div>
+                <label htmlFor="body-size" className="block text-sm font-medium mb-1">
+                  Body Size <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  id="body-size"
+                  type="number"
+                  value={bodySize}
+                  onChange={(e) => setBodySize(e.target.value)}
+                  placeholder="e.g., 9 for LSA"
+                  min="1"
+                  max="100"
+                  className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Used to calculate majority. Leave blank to use participants count.
+                </p>
+              </div>
+            )}
             {error && <p role="alert" className="text-red-600 text-sm">{error}</p>}
             <div className="flex gap-3">
               <button

@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { nanoid } from 'nanoid';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { router, authedProcedure, tellerProcedure } from '../trpc.js';
 import { db, schema } from '../db/index.js';
 import {
@@ -9,7 +9,9 @@ import {
   EndRoundSchema,
   CancelRoundSchema,
   CloseVotingSchema,
+  selectWinners,
 } from '@officer-election/shared';
+import type { CloseVotingResult } from '@officer-election/shared';
 import { sseManager } from '../sse.js';
 import { getElectionState, countVotes, buildTallies, hasMajority, getMajorityThreshold } from '../utils.js';
 
@@ -32,6 +34,32 @@ export const roundRouter = router({
         });
       }
 
+      const electionType = ctx.election.electionType;
+
+      let eligibleCandidateIds: string[] | null = null;
+      if (input.eligibleCandidateIds && input.eligibleCandidateIds.length > 0) {
+        if (electionType !== 'by_election') {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'eligibleCandidateIds is only valid for by-elections',
+          });
+        }
+        const activeCandidates = await db.query.candidates.findMany({
+          where: and(
+            eq(schema.candidates.electionId, ctx.election.id),
+            isNull(schema.candidates.removedAt),
+            inArray(schema.candidates.id, input.eligibleCandidateIds)
+          ),
+        });
+        if (activeCandidates.length !== input.eligibleCandidateIds.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'One or more eligible candidates are not in the active roster',
+          });
+        }
+        eligibleCandidateIds = input.eligibleCandidateIds;
+      }
+
       const roundId = nanoid();
       const now = new Date();
 
@@ -40,19 +68,18 @@ export const roundRouter = router({
         electionId: ctx.election.id,
         office: input.office,
         description: input.description || null,
+        electionType,
+        eligibleCandidateIds: eligibleCandidateIds ? JSON.stringify(eligibleCandidateIds) : null,
         status: 'voting',
         createdAt: now,
       });
 
-      // electionType + eligibleCandidateIds: step 4 will inherit/validate from
-      // the parent election; for now mirror the DB defaults so existing officer
-      // flows continue unchanged.
       const round = {
         id: roundId,
         office: input.office,
         description: input.description || null,
-        electionType: 'officer' as const,
-        eligibleCandidateIds: null,
+        electionType,
+        eligibleCandidateIds,
         status: 'voting' as const,
         disclosureLevel: null,
         createdAt: now.toISOString(),
@@ -96,17 +123,40 @@ export const roundRouter = router({
         });
       }
 
-      // Validate candidate if not abstaining
+      // Validate candidate if not abstaining. Pool depends on round.electionType.
       if (input.candidateId) {
-        const candidate = await db.query.participants.findFirst({
-          where: and(
-            eq(schema.participants.id, input.candidateId),
-            eq(schema.participants.electionId, ctx.election.id)
-          ),
-        });
-
-        if (!candidate) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid candidate' });
+        if (round.electionType === 'by_election') {
+          const candidate = await db.query.candidates.findFirst({
+            where: and(
+              eq(schema.candidates.id, input.candidateId),
+              eq(schema.candidates.electionId, ctx.election.id)
+            ),
+          });
+          if (!candidate || candidate.removedAt !== null) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'This candidate is no longer eligible',
+            });
+          }
+          if (round.eligibleCandidateIds) {
+            const eligible = JSON.parse(round.eligibleCandidateIds) as string[];
+            if (!eligible.includes(input.candidateId)) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: 'This candidate is not eligible in the current round',
+              });
+            }
+          }
+        } else {
+          const candidate = await db.query.participants.findFirst({
+            where: and(
+              eq(schema.participants.id, input.candidateId),
+              eq(schema.participants.electionId, ctx.election.id)
+            ),
+          });
+          if (!candidate) {
+            throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid candidate' });
+          }
         }
       }
 
@@ -160,7 +210,7 @@ export const roundRouter = router({
 
   closeVoting: tellerProcedure
     .input(CloseVotingSchema)
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input, ctx }): Promise<CloseVotingResult> => {
       const round = await db.query.rounds.findFirst({
         where: and(
           eq(schema.rounds.id, input.roundId),
@@ -179,16 +229,36 @@ export const roundRouter = router({
         .set({ status: 'closed' })
         .where(eq(schema.rounds.id, input.roundId));
 
-      // Calculate vote tallies for teller
       const votes = await db.query.votes.findMany({
         where: eq(schema.votes.roundId, input.roundId),
       });
+      const voteCounts = countVotes(votes);
+
+      // Broadcast that voting is closed (but not results)
+      sseManager.broadcast(ctx.election.id, 'voting_closed', {
+        roundId: input.roundId,
+      });
+
+      if (round.electionType === 'by_election') {
+        const candidateRows = await db.query.candidates.findMany({
+          where: eq(schema.candidates.electionId, ctx.election.id),
+        });
+        const nameById = new Map(candidateRows.map((c) => [c.id, c.name]));
+        const tallies = buildTallies(voteCounts, nameById);
+        const vacancyCount = ctx.election.vacancyCount ?? 1;
+        const selection = selectWinners(tallies, vacancyCount);
+        return {
+          electionType: 'by_election',
+          tallies,
+          totalVotes: votes.length,
+          selection,
+          vacancyCount,
+        };
+      }
 
       const participants = await db.query.participants.findMany({
         where: eq(schema.participants.electionId, ctx.election.id),
       });
-
-      const voteCounts = countVotes(votes);
       const nameById = new Map(participants.map((p) => [p.id, p.name]));
       const tallies = buildTallies(voteCounts, nameById);
 
@@ -199,12 +269,8 @@ export const roundRouter = router({
       const topCount = actualVotes[0]?.count || 0;
       const hasWon = hasMajority(topCount, majorityBase);
 
-      // Broadcast that voting is closed (but not results)
-      sseManager.broadcast(ctx.election.id, 'voting_closed', {
-        roundId: input.roundId,
-      });
-
       return {
+        electionType: 'officer',
         tallies,
         totalVotes: votes.length,
         majorityThreshold,
@@ -228,8 +294,8 @@ export const roundRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Round not found or voting not closed yet' });
       }
 
-      // For top_no_count, verify there's a majority winner
-      if (input.disclosureLevel === 'top_no_count') {
+      // Officer-only: top_no_count requires a majority winner. By-elections have no majority concept.
+      if (round.electionType === 'officer' && input.disclosureLevel === 'top_no_count') {
         const votes = await db.query.votes.findMany({
           where: eq(schema.votes.roundId, input.roundId),
         });

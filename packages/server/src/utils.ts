@@ -6,8 +6,17 @@ import {
   getMajorityThreshold,
   getTopCandidates,
   hasMajority,
+  selectWinners,
 } from '@officer-election/shared';
-import type { Candidate, Election, ElectionState, RoundLogEntry, RoundResult } from '@officer-election/shared';
+import type {
+  Candidate,
+  Election,
+  ElectionState,
+  RoundLogEntry,
+  RoundResult,
+  VoteTally,
+  WinnerSelection,
+} from '@officer-election/shared';
 
 export { buildTallies, countVotes, getMajorityThreshold, getTopCandidates, hasMajority };
 
@@ -62,7 +71,7 @@ export async function getElectionState(
   if (!currentRound && !pendingRound) {
     const revealedRound = rounds.find((r) => r.status === 'revealed');
     if (revealedRound) {
-      result = await getRoundResult(revealedRound, participants, participant.role === 'teller', election.bodySize);
+      result = await getRoundResult(revealedRound, participants, participant.role === 'teller', election);
     }
   }
 
@@ -71,7 +80,7 @@ export async function getElectionState(
   for (const round of completedRounds) {
     let logResult: RoundResult | null = null;
     if (round.status === 'revealed' && round.disclosureLevel !== 'none') {
-      logResult = await getRoundResult(round, participants, participant.role === 'teller', election.bodySize);
+      logResult = await getRoundResult(round, participants, participant.role === 'teller', election);
     }
     roundLog.push({ round: formatRound(round), result: logResult });
   }
@@ -138,24 +147,62 @@ async function getRoundResult(
   round: typeof schema.rounds.$inferSelect,
   participants: (typeof schema.participants.$inferSelect)[],
   isTeller: boolean,
-  bodySize: number | null
+  election: typeof schema.elections.$inferSelect
 ): Promise<RoundResult> {
-  // By-election branch lands in step 4. Until then, narrow to officer.
-  if (round.electionType === 'by_election') {
-    throw new Error('by-election round results not yet implemented');
-  }
-
   const votes = await db.query.votes.findMany({
     where: eq(schema.votes.roundId, round.id),
   });
-
   const voteCounts = countVotes(votes);
+
+  if (round.electionType === 'by_election') {
+    // Include soft-deleted candidates so historical results can still resolve names.
+    const candidateRows = await db.query.candidates.findMany({
+      where: eq(schema.candidates.electionId, election.id),
+    });
+    const nameById = new Map(candidateRows.map((c) => [c.id, c.name]));
+    let tallies = buildTallies(voteCounts, nameById);
+    const vacancyCount = election.vacancyCount ?? 1;
+    let selection = selectWinners(tallies, vacancyCount);
+
+    // Disclosure filtering for non-teller view: limit visible tallies
+    // to the candidates surfaced by the selection. For top_no_count, also
+    // zero out counts on the selection so they don't leak over the wire.
+    if (round.disclosureLevel === 'top' || round.disclosureLevel === 'top_no_count') {
+      const visibleIds = new Set<string>();
+      if (selection.outcome === 'decisive') {
+        for (const w of selection.winners) {
+          if (w.candidateId) visibleIds.add(w.candidateId);
+        }
+      } else if (selection.outcome === 'tie') {
+        for (const w of selection.decisiveWinners) {
+          if (w.candidateId) visibleIds.add(w.candidateId);
+        }
+        for (const t of selection.tiedCandidates) {
+          if (t.candidateId) visibleIds.add(t.candidateId);
+        }
+      }
+      tallies = tallies.filter((t) => t.candidateId !== null && visibleIds.has(t.candidateId));
+      if (round.disclosureLevel === 'top_no_count') {
+        selection = redactCounts(selection);
+      }
+    }
+
+    return {
+      electionType: 'by_election',
+      round: formatRound(round),
+      tallies,
+      totalVotes: votes.length,
+      selection,
+      vacancyCount,
+    };
+  }
+
   const nameById = new Map(participants.map((p) => [p.id, p.name]));
-  let tallies = buildTallies(voteCounts, nameById);
+  let tallies: VoteTally[] = buildTallies(voteCounts, nameById);
 
   // Calculate majority based on bodySize if set, otherwise totalVotes
   // Use top non-abstention vote count for majority check (abstentions can't "win")
-  const majorityBase = bodySize ?? votes.length;
+  const majorityBase = election.bodySize ?? votes.length;
   const actualVotes = tallies.filter((t) => t.candidateId !== null);
   const topCount = actualVotes[0]?.count ?? 0;
   const hasWinnerMajority = hasMajority(topCount, majorityBase);
@@ -167,13 +214,31 @@ async function getRoundResult(
   }
 
   return {
-    electionType: round.electionType,
+    electionType: 'officer',
     round: formatRound(round),
     tallies,
     totalVotes: votes.length,
     hasMajority: hasWinnerMajority,
     majorityThreshold: threshold,
   };
+}
+
+function redactCounts(selection: WinnerSelection): WinnerSelection {
+  if (selection.outcome === 'decisive') {
+    return {
+      outcome: 'decisive',
+      winners: selection.winners.map((w) => ({ ...w, count: 0 })),
+    };
+  }
+  if (selection.outcome === 'tie') {
+    return {
+      outcome: 'tie',
+      decisiveWinners: selection.decisiveWinners.map((w) => ({ ...w, count: 0 })),
+      tiedCandidates: selection.tiedCandidates.map((t) => ({ ...t, count: 0 })),
+      seatsContested: selection.seatsContested,
+    };
+  }
+  return selection;
 }
 
 function formatRound(round: typeof schema.rounds.$inferSelect) {

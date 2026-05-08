@@ -71,13 +71,23 @@ export interface VoterStatus {
   hasVoted: boolean;
 }
 
-export interface CloseVotingResult {
+interface CloseVotingResultBase {
   tallies: VoteTally[];
   totalVotes: number;
-  majorityThreshold: number;
-  hasMajority: boolean;
-  bodySize: number | null;
 }
+
+export type CloseVotingResult =
+  | (CloseVotingResultBase & {
+      electionType: 'officer';
+      majorityThreshold: number;
+      hasMajority: boolean;
+      bodySize: number | null;
+    })
+  | (CloseVotingResultBase & {
+      electionType: 'by_election';
+      selection: WinnerSelection;
+      vacancyCount: number;
+    });
 
 interface RoundResultBase {
   round: Round;

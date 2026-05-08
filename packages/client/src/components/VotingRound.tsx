@@ -1,20 +1,49 @@
 import { useState } from 'react';
 import { trpc } from '../trpc';
-import type { Participant, Round } from '@officer-election/shared';
+import type { ElectionState, Round } from '@officer-election/shared';
 
 interface VotingRoundProps {
+  state: ElectionState;
   round: Round;
-  participants: Participant[];
   onVoted: () => void;
 }
 
-export default function VotingRound({ round, participants, onVoted }: VotingRoundProps) {
+interface CandidateOption {
+  id: string;
+  name: string;
+  badge?: string;
+}
+
+function getCandidateOptions(state: ElectionState, round: Round): CandidateOption[] {
+  if (state.election.electionType === 'by_election') {
+    let options = state.election.candidates
+      .filter((c) => c.removedAt === null)
+      .map((c) => ({ id: c.id, name: c.name }));
+    if (round.eligibleCandidateIds && round.eligibleCandidateIds.length > 0) {
+      const eligible = new Set(round.eligibleCandidateIds);
+      options = options.filter((o) => eligible.has(o.id));
+    }
+    return options;
+  }
+  return state.participants.map((p) => ({
+    id: p.id,
+    name: p.name,
+    badge: p.role === 'teller' ? 'Teller' : undefined,
+  }));
+}
+
+export default function VotingRound({ state, round, onVoted }: VotingRoundProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [isAbstain, setIsAbstain] = useState(false);
 
   const voteMutation = trpc.round.vote.useMutation({
     onSuccess: () => onVoted(),
   });
+
+  const options = getCandidateOptions(state, round);
+  const isByElection = state.election.electionType === 'by_election';
+  const isRunoff =
+    isByElection && round.eligibleCandidateIds && round.eligibleCandidateIds.length > 0;
 
   const handleVote = () => {
     if (!isAbstain && !selected) return;
@@ -36,39 +65,51 @@ export default function VotingRound({ round, participants, onVoted }: VotingRoun
 
   const selectedName = isAbstain
     ? 'Abstain'
-    : participants.find((p) => p.id === selected)?.name;
+    : options.find((o) => o.id === selected)?.name;
+
+  const heading = isByElection ? round.office : `Vote for ${round.office}`;
 
   return (
     <div role="form" aria-labelledby="vote-heading">
       <div className="text-center mb-6">
         <h2 id="vote-heading" className="text-xl font-semibold mb-1">
-          Vote for {round.office}
+          {heading}
         </h2>
         {round.description && (
           <p className="text-gray-600" id="vote-description">
             {round.description}
           </p>
         )}
+        {isRunoff && (
+          <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3 inline-block">
+            Runoff round — only listed candidates are eligible
+          </p>
+        )}
       </div>
 
       <fieldset className="space-y-2 mb-6">
-        <legend className="sr-only">Select a candidate for {round.office}</legend>
-        {participants.map((p) => (
+        <legend className="sr-only">Select a candidate</legend>
+        {options.length === 0 && (
+          <p className="text-sm text-gray-500 italic p-3">
+            No eligible candidates. Ask a teller to add some to the roster.
+          </p>
+        )}
+        {options.map((o) => (
           <button
-            key={p.id}
+            key={o.id}
             type="button"
-            onClick={() => handleSelect(p.id)}
-            aria-pressed={selected === p.id}
+            onClick={() => handleSelect(o.id)}
+            aria-pressed={selected === o.id}
             className={`w-full p-4 text-left rounded-lg border-2 transition ${
-              selected === p.id
+              selected === o.id
                 ? 'border-blue-500 bg-blue-50'
                 : 'border-gray-200 hover:border-gray-300'
             }`}
           >
-            <span className="font-medium">{p.name}</span>
-            {p.role === 'teller' && (
+            <span className="font-medium">{o.name}</span>
+            {o.badge && (
               <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
-                Teller
+                {o.badge}
               </span>
             )}
           </button>

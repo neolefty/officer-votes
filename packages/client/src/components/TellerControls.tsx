@@ -9,9 +9,15 @@ interface TellerControlsProps {
   onAction: () => void;
 }
 
+interface RunoffPrefill {
+  candidateNames: string[];
+  candidateIds: string[];
+}
+
 export default function TellerControls({ state, onAction }: TellerControlsProps) {
   const [showStartModal, setShowStartModal] = useState(false);
   const [showEndModal, setShowEndModal] = useState(false);
+  const [runoffPrefill, setRunoffPrefill] = useState<RunoffPrefill | null>(null);
 
   const cancelMutation = trpc.round.cancel.useMutation({
     onSuccess: () => onAction(),
@@ -22,6 +28,19 @@ export default function TellerControls({ state, onAction }: TellerControlsProps)
     if (!roundId) return;
     if (!confirm('Cancel this round? All votes will be discarded.')) return;
     cancelMutation.mutate({ roundId });
+  };
+
+  const handleTieRunoff = (tied: { id: string; name: string }[]) => {
+    setRunoffPrefill({
+      candidateIds: tied.map((t) => t.id),
+      candidateNames: tied.map((t) => t.name),
+    });
+    setShowStartModal(true);
+  };
+
+  const handleStartFresh = () => {
+    setRunoffPrefill(null);
+    setShowStartModal(true);
   };
 
   return (
@@ -52,7 +71,7 @@ export default function TellerControls({ state, onAction }: TellerControlsProps)
           ) : (
             <button
               type="button"
-              onClick={() => setShowStartModal(true)}
+              onClick={handleStartFresh}
               className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
             >
               Start New Round
@@ -63,7 +82,12 @@ export default function TellerControls({ state, onAction }: TellerControlsProps)
 
       {showStartModal && (
         <StartRoundModal
-          onClose={() => setShowStartModal(false)}
+          electionType={state.election.electionType}
+          runoff={runoffPrefill ?? undefined}
+          onClose={() => {
+            setShowStartModal(false);
+            setRunoffPrefill(null);
+          }}
           onSuccess={onAction}
         />
       )}
@@ -73,6 +97,7 @@ export default function TellerControls({ state, onAction }: TellerControlsProps)
           state={state}
           onClose={() => setShowEndModal(false)}
           onSuccess={onAction}
+          onTieRunoff={handleTieRunoff}
         />
       )}
     </>
