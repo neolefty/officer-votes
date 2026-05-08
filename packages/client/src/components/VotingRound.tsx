@@ -14,6 +14,10 @@ interface CandidateOption {
   badge?: string;
 }
 
+function byName<T extends { name: string }>(a: T, b: T) {
+  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+}
+
 function getCandidateOptions(state: ElectionState, round: Round): CandidateOption[] {
   if (state.election.electionType === 'by_election') {
     let options = state.election.candidates
@@ -23,13 +27,15 @@ function getCandidateOptions(state: ElectionState, round: Round): CandidateOptio
       const eligible = new Set(round.eligibleCandidateIds);
       options = options.filter((o) => eligible.has(o.id));
     }
-    return options;
+    return options.sort(byName);
   }
-  return state.participants.map((p) => ({
-    id: p.id,
-    name: p.name,
-    badge: p.role === 'teller' ? 'Teller' : undefined,
-  }));
+  return state.participants
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      badge: p.role === 'teller' ? 'Teller' : undefined,
+    }))
+    .sort(byName);
 }
 
 export default function VotingRound({ state, round, onVoted }: VotingRoundProps) {

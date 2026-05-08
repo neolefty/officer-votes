@@ -47,8 +47,10 @@ export default function CandidateRoster({
     onError: (err) => setError(err.message),
   });
 
-  const activeCandidates = candidates.filter((c) => c.removedAt === null);
-  const removedCandidates = candidates.filter((c) => c.removedAt !== null);
+  const byName = (a: Candidate, b: Candidate) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  const activeCandidates = candidates.filter((c) => c.removedAt === null).sort(byName);
+  const removedCandidates = candidates.filter((c) => c.removedAt !== null).sort(byName);
 
   const handleAdd = (e: React.FormEvent) => {
     e.preventDefault();
