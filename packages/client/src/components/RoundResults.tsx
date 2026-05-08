@@ -5,6 +5,7 @@ interface RoundResultsProps {
 }
 
 export default function RoundResults({ result }: RoundResultsProps) {
+  if (result.electionType !== 'officer') return null;
   const { round, tallies, totalVotes, hasMajority, majorityThreshold } = result;
 
   // Exclude abstentions when determining top candidates (abstentions can't "win")

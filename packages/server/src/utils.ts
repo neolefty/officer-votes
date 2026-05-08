@@ -1,61 +1,15 @@
 import { eq, desc } from 'drizzle-orm';
 import { db, schema } from './db/index.js';
-import type { ElectionState, RoundLogEntry, RoundResult, VoteTally } from '@officer-election/shared';
+import {
+  buildTallies,
+  countVotes,
+  getMajorityThreshold,
+  getTopCandidates,
+  hasMajority,
+} from '@officer-election/shared';
+import type { ElectionState, RoundLogEntry, RoundResult } from '@officer-election/shared';
 
-/**
- * Count votes by candidate, returning a Map of candidateId -> count
- */
-export function countVotes(votes: { candidateId: string | null }[]): Map<string | null, number> {
-  const counts = new Map<string | null, number>();
-  for (const vote of votes) {
-    counts.set(vote.candidateId, (counts.get(vote.candidateId) || 0) + 1);
-  }
-  return counts;
-}
-
-/**
- * Build sorted vote tallies from vote counts
- */
-export function buildTallies(
-  voteCounts: Map<string | null, number>,
-  participants: { id: string; name: string }[]
-): VoteTally[] {
-  return Array.from(voteCounts.entries())
-    .map(([candidateId, count]) => ({
-      candidateId,
-      candidateName: candidateId
-        ? participants.find((p) => p.id === candidateId)?.name || 'Unknown'
-        : null,
-      count,
-    }))
-    .sort((a, b) => b.count - a.count);
-}
-
-/**
- * Check if the top vote count constitutes a majority.
- * Majority = more than half of the base (> 50%).
- */
-export function hasMajority(topCount: number, majorityBase: number): boolean {
-  return topCount > majorityBase / 2;
-}
-
-/**
- * Get the majority threshold (minimum votes needed for majority).
- */
-export function getMajorityThreshold(majorityBase: number): number {
-  return Math.floor(majorityBase / 2) + 1;
-}
-
-/**
- * Filter tallies to only include top candidates (those with the highest count).
- * Excludes abstentions (candidateId === null) from being considered as "top".
- */
-export function getTopCandidates(tallies: VoteTally[]): VoteTally[] {
-  const actualVotes = tallies.filter((t) => t.candidateId !== null);
-  if (actualVotes.length === 0) return [];
-  const topCount = actualVotes[0].count;
-  return actualVotes.filter((t) => t.count === topCount);
-}
+export { buildTallies, countVotes, getMajorityThreshold, getTopCandidates, hasMajority };
 
 export async function getElectionState(
   election: typeof schema.elections.$inferSelect,
@@ -161,7 +115,8 @@ async function getRoundResult(
   });
 
   const voteCounts = countVotes(votes);
-  let tallies = buildTallies(voteCounts, participants);
+  const nameById = new Map(participants.map((p) => [p.id, p.name]));
+  let tallies = buildTallies(voteCounts, nameById);
 
   // Calculate majority based on bodySize if set, otherwise totalVotes
   // Use top non-abstention vote count for majority check (abstentions can't "win")
@@ -177,6 +132,7 @@ async function getRoundResult(
   }
 
   return {
+    electionType: 'officer',
     round: formatRound(round),
     tallies,
     totalVotes: votes.length,

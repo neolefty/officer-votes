@@ -14,3 +14,12 @@ export type {
   RoundLogEntry,
 } from './types.js';
 export * from './constants.js';
+export {
+  countVotes,
+  buildTallies,
+  hasMajority,
+  getMajorityThreshold,
+  getTopCandidates,
+  selectWinners,
+} from './voting.js';
+export type { WinnerSelection } from './voting.js';

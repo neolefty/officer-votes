@@ -17,17 +17,21 @@
     "db:generate": "pnpm --filter server db:generate",
     "db:migrate": "pnpm --filter server db:migrate",
     "lint": "eslint packages",
-    "lint:fix": "eslint packages --fix"
+    "lint:fix": "eslint packages --fix",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "engines": {
     "node": ">=20"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@vitest/coverage-v8": "^2.1.9",
     "eslint": "^9.39.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^16.5.0",
-    "typescript-eslint": "^8.48.1"
+    "typescript-eslint": "^8.48.1",
+    "vitest": "^2.1.9"
   }
 }

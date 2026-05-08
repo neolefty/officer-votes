@@ -4,6 +4,7 @@ import type {
   RoundStatus as RoundStatusSchema,
   DisclosureLevel as DisclosureLevelSchema,
 } from './schemas.js';
+import type { WinnerSelection } from './voting.js';
 
 // Infer types from Zod schemas
 export type ParticipantRole = z.infer<typeof ParticipantRoleSchema>;
@@ -54,13 +55,23 @@ export interface CloseVotingResult {
   bodySize: number | null;
 }
 
-export interface RoundResult {
+interface RoundResultBase {
   round: Round;
   tallies: VoteTally[];
   totalVotes: number;
-  hasMajority: boolean;
-  majorityThreshold: number;
 }
+
+export type RoundResult =
+  | (RoundResultBase & {
+      electionType: 'officer';
+      hasMajority: boolean;
+      majorityThreshold: number;
+    })
+  | (RoundResultBase & {
+      electionType: 'by_election';
+      selection: WinnerSelection;
+      vacancyCount: number;
+    });
 
 export interface ElectionState {
   election: Election;

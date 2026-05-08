@@ -184,7 +184,8 @@ export const roundRouter = router({
       });
 
       const voteCounts = countVotes(votes);
-      const tallies = buildTallies(voteCounts, participants);
+      const nameById = new Map(participants.map((p) => [p.id, p.name]));
+      const tallies = buildTallies(voteCounts, nameById);
 
       // Calculate majority info (excluding abstentions - they can't "win")
       const majorityBase = ctx.election.bodySize || votes.length;
