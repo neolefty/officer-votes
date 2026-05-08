@@ -69,7 +69,7 @@ export default function Home() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-md">
-        <h1 className="text-3xl font-bold text-center mb-8">Officer Election</h1>
+        <h1 className="text-3xl font-bold text-center mb-8">Election</h1>
 
         {mode === null && (
           <div className="space-y-4">
@@ -77,13 +77,13 @@ export default function Home() {
               onClick={() => setMode('create')}
               className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition"
             >
-              Create New Meeting
+              Create New Election
             </button>
             <button
               onClick={() => setMode('join')}
               className="w-full py-3 px-4 bg-gray-200 text-gray-800 rounded-lg font-medium hover:bg-gray-300 transition"
             >
-              Join Existing Meeting
+              Join Election
             </button>
           </div>
         )}
@@ -91,10 +91,10 @@ export default function Home() {
         {mode === 'create' && (
           <form onSubmit={handleCreate} className="space-y-4">
             <p className="text-sm text-gray-600 mb-4">
-              A meeting is a session where you&apos;ll elect one or more officers (Chair, Secretary, etc.) or fill a vacancy by by-election. You can designate additional tellers and hold multiple rounds of voting.
+              An election session lets you elect officers (Chair, Secretary, etc.) or fill a vacancy by by-election. You can designate additional tellers and hold multiple rounds of voting.
             </p>
             <fieldset className="space-y-2">
-              <legend className="block text-sm font-medium mb-1">Meeting Type</legend>
+              <legend className="block text-sm font-medium mb-1">Election Type</legend>
               <label className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition ${
                 electionType === 'officer' ? 'border-blue-500 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
               }`}>
@@ -130,7 +130,7 @@ export default function Home() {
             </fieldset>
             <div>
               <label htmlFor="election-name" className="block text-sm font-medium mb-1">
-                Meeting Name
+                Election Name
               </label>
               <input
                 id="election-name"
@@ -199,7 +199,7 @@ export default function Home() {
           <form onSubmit={handleJoin} className="space-y-4">
             <div>
               <label htmlFor="join-code" className="block text-sm font-medium mb-1">
-                Meeting Code
+                Election Code
               </label>
               <input
                 id="join-code"

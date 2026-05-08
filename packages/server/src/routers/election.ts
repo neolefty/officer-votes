@@ -97,6 +97,21 @@ export const electionRouter = router({
       return { token };
     }),
 
+  getPreview: publicProcedure
+    .input(JoinElectionSchema.pick({ code: true }))
+    .query(async ({ input }) => {
+      const election = await db.query.elections.findFirst({
+        where: eq(schema.elections.code, input.code.toUpperCase()),
+        columns: { name: true, expiresAt: true },
+      });
+
+      if (!election || new Date() > election.expiresAt) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Election not found' });
+      }
+
+      return { name: election.name };
+    }),
+
   // Rejoin with existing token - just validates and returns state
   rejoin: publicProcedure
     .input(JoinElectionSchema.pick({ code: true }).extend({ token: JoinElectionSchema.shape.name.optional() }))

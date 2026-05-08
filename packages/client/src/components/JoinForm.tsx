@@ -10,6 +10,11 @@ export default function JoinForm({ code, onJoined }: JoinFormProps) {
   const [name, setName] = useState('');
   const [error, setError] = useState('');
 
+  const previewQuery = trpc.election.getPreview.useQuery(
+    { code: code.toUpperCase() },
+    { retry: false }
+  );
+
   const joinMutation = trpc.election.join.useMutation({
     onSuccess: (data) => onJoined(data.token),
     onError: (err) => setError(err.message),
@@ -24,7 +29,12 @@ export default function JoinForm({ code, onJoined }: JoinFormProps) {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <div className="w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-2">Join Meeting</h1>
+        <p className="text-center text-sm font-medium uppercase tracking-wide text-gray-500 mb-1">
+          Join Election
+        </p>
+        {previewQuery.data && (
+          <h1 className="text-3xl font-bold text-center mb-1">{previewQuery.data.name}</h1>
+        )}
         <p className="text-center text-gray-500 mb-8">Code: {code.toUpperCase()}</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
