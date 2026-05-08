@@ -349,6 +349,85 @@ function ByElectionTellerView({
   );
 }
 
+function getByElectionDisclosureCopy(
+  selection: Extract<CloseVotingResult, { electionType: 'by_election' }>['selection']
+): {
+  topLabel: string;
+  topNoCountLabel: string;
+  topDescription: string;
+  topNoCountDescription: string;
+} {
+  if (selection.outcome === 'decisive') {
+    return {
+      topLabel: 'Show winner(s) with count',
+      topNoCountLabel: 'Show winner(s) only',
+      topDescription: 'Reveal elected candidate(s) and their counts',
+      topNoCountDescription: 'Reveal elected candidate(s) without vote counts',
+    };
+  }
+  if (selection.outcome === 'tie' && selection.decisiveWinners.length === 0) {
+    return {
+      topLabel: 'Show tied candidates with counts',
+      topNoCountLabel: 'Show tied candidates only',
+      topDescription: 'Reveal who tied and their vote counts',
+      topNoCountDescription: 'Reveal who tied (no vote counts)',
+    };
+  }
+  if (selection.outcome === 'tie') {
+    return {
+      topLabel: 'Show winners and tied candidates with counts',
+      topNoCountLabel: 'Show winners and tied candidates only',
+      topDescription: 'Reveal elected and tied candidates with counts',
+      topNoCountDescription: 'Reveal elected and tied candidates (no vote counts)',
+    };
+  }
+  return {
+    topLabel: 'Share outcome',
+    topNoCountLabel: 'Share outcome',
+    topDescription: 'No votes were cast',
+    topNoCountDescription: 'No votes were cast',
+  };
+}
+
+interface DisclosureCopy {
+  topLabel: string;
+  topDescription: string;
+  topNoCountLabel: string;
+  topNoCountDescription: string;
+  topNoCountDisabled: boolean;
+}
+
+function getDisclosureCopy(results: CloseVotingResult | null): DisclosureCopy {
+  if (!results) {
+    return {
+      topLabel: 'Show winner(s) with count',
+      topDescription: 'Reveal elected candidate(s) and their counts',
+      topNoCountLabel: 'Show winner(s) only',
+      topNoCountDescription: 'Reveal elected candidate(s) without vote counts',
+      topNoCountDisabled: false,
+    };
+  }
+  if (results.electionType === 'officer') {
+    return {
+      topLabel: 'Show top recipient(s) with count',
+      topDescription: 'Reveal who received the most votes and how many',
+      topNoCountLabel: 'Show top recipient(s) only',
+      topNoCountDescription: results.hasMajority
+        ? 'Reveal winner without vote counts'
+        : 'Requires majority (not available)',
+      topNoCountDisabled: !results.hasMajority,
+    };
+  }
+  const byElection = getByElectionDisclosureCopy(results.selection);
+  return {
+    topLabel: byElection.topLabel,
+    topDescription: byElection.topDescription,
+    topNoCountLabel: byElection.topNoCountLabel,
+    topNoCountDescription: byElection.topNoCountDescription,
+    topNoCountDisabled: false,
+  };
+}
+
 function DisclosureOptions({
   selectedDisclosure,
   results,
@@ -358,28 +437,19 @@ function DisclosureOptions({
   results: CloseVotingResult | null;
   onSelect: (level: DisclosureLevel) => void;
 }) {
-  const isOfficer = results?.electionType === 'officer';
-  const hasMajority = isOfficer ? results.hasMajority : false;
-  const topLabel = isOfficer ? 'Show top recipient(s) with count' : 'Show winner(s) with count';
-  const topNoCountLabel = isOfficer ? 'Show top recipient(s) only' : 'Show winner(s) only';
+  const copy = getDisclosureCopy(results);
 
   const options: { level: DisclosureLevel; label: string; description: string; disabled?: boolean }[] = [
     {
       level: 'top',
-      label: topLabel,
-      description: isOfficer
-        ? 'Reveal who received the most votes and how many'
-        : 'Reveal elected candidate(s) and their counts',
+      label: copy.topLabel,
+      description: copy.topDescription,
     },
     {
       level: 'top_no_count',
-      label: topNoCountLabel,
-      description: isOfficer
-        ? hasMajority
-          ? 'Reveal winner without vote counts'
-          : 'Requires majority (not available)'
-        : 'Reveal elected candidate(s) without vote counts',
-      disabled: isOfficer && !hasMajority,
+      label: copy.topNoCountLabel,
+      description: copy.topNoCountDescription,
+      disabled: copy.topNoCountDisabled,
     },
     {
       level: 'all',
