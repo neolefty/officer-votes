@@ -13,16 +13,25 @@ export type RoundStatus = z.infer<typeof RoundStatusSchema>;
 export type DisclosureLevel = z.infer<typeof DisclosureLevelSchema>;
 export type ElectionType = z.infer<typeof ElectionTypeSchema>;
 
-export interface Election {
+interface ElectionBase {
   id: string;
   code: string;
   name: string;
   bodySize: number | null;
-  electionType: ElectionType;
-  vacancyCount: number | null;
   createdAt: string;
   expiresAt: string;
 }
+
+export type Election =
+  | (ElectionBase & {
+      electionType: 'officer';
+      vacancyCount: null;
+    })
+  | (ElectionBase & {
+      electionType: 'by_election';
+      vacancyCount: number;
+      candidates: Candidate[];
+    });
 
 export interface Participant {
   id: string;

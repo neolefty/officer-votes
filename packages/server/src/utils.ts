@@ -7,7 +7,7 @@ import {
   getTopCandidates,
   hasMajority,
 } from '@officer-election/shared';
-import type { ElectionState, RoundLogEntry, RoundResult } from '@officer-election/shared';
+import type { Candidate, Election, ElectionState, RoundLogEntry, RoundResult } from '@officer-election/shared';
 
 export { buildTallies, countVotes, getMajorityThreshold, getTopCandidates, hasMajority };
 
@@ -76,17 +76,45 @@ export async function getElectionState(
     roundLog.push({ round: formatRound(round), result: logResult });
   }
 
+  const electionBase = {
+    id: election.id,
+    code: election.code,
+    name: election.name,
+    bodySize: election.bodySize,
+    createdAt: election.createdAt.toISOString(),
+    expiresAt: election.expiresAt.toISOString(),
+  };
+
+  let electionResponse: Election;
+  if (election.electionType === 'by_election') {
+    const candidateRows = await db.query.candidates.findMany({
+      where: eq(schema.candidates.electionId, election.id),
+      orderBy: schema.candidates.displayOrder,
+    });
+    const candidates: Candidate[] = candidateRows.map((row) => ({
+      id: row.id,
+      electionId: row.electionId,
+      name: row.name,
+      displayOrder: row.displayOrder,
+      removedAt: row.removedAt,
+      createdAt: row.createdAt.toISOString(),
+    }));
+    electionResponse = {
+      ...electionBase,
+      electionType: 'by_election',
+      vacancyCount: election.vacancyCount ?? 1,
+      candidates,
+    };
+  } else {
+    electionResponse = {
+      ...electionBase,
+      electionType: 'officer',
+      vacancyCount: null,
+    };
+  }
+
   return {
-    election: {
-      id: election.id,
-      code: election.code,
-      name: election.name,
-      bodySize: election.bodySize,
-      electionType: election.electionType,
-      vacancyCount: election.vacancyCount,
-      createdAt: election.createdAt.toISOString(),
-      expiresAt: election.expiresAt.toISOString(),
-    },
+    election: electionResponse,
     participants: participants.map((p) => ({
       id: p.id,
       name: p.name,

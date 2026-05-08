@@ -29,11 +29,17 @@ export const electionRouter = router({
       const now = new Date();
       const expiresAt = new Date(now.getTime() + ELECTION_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
+      const electionType = input.electionType;
+      const vacancyCount =
+        electionType === 'by_election' ? input.vacancyCount ?? 1 : null;
+
       await db.insert(schema.elections).values({
         id,
         code,
         name: input.name,
         bodySize: input.bodySize ?? null,
+        electionType,
+        vacancyCount,
         createdAt: now,
         expiresAt,
       });

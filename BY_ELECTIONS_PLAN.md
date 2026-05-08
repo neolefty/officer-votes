@@ -33,29 +33,28 @@ Shipped:
 
 Note: `election.ts:create` was *not* touched — Drizzle's column defaults make `electionType`/`vacancyCount` optional on insert. Step 3 will explicitly pass them through so users can actually create by-elections.
 
-### 3. `candidate.ts` router + roster mutations
+### 3. `candidate.ts` router + roster mutations — **DONE**
 
-New file `packages/server/src/routers/candidate.ts`, mounted in `routers/index.ts`. No status-based hard lock — mutations allowed regardless of round state.
+Shipped:
 
-- `list` (authedProcedure) → all rows including soft-deleted, sorted by `displayOrder`. Client filters to active for input UIs; uses full set to resolve historical names.
-- `add` (tellerProcedure) → `{ name }`. Trim, reject empty. Reject if any **active** candidate already has the same case-insensitive name (soft-deleted rows don't count — re-adding a removed name is fine). `displayOrder = MAX + 1`.
-- `update` (tellerProcedure) → `{ id, name }`. Trim, reject empty. Same case-insensitive uniqueness check, scoped to active candidates other than the row being updated (so re-casing your own name is fine). Allowed even when `removedAt` is set (typo fix on historical name).
-- `remove` (tellerProcedure) → `{ id }`. Soft-delete (set `removedAt = Date.now()`). Hard-delete only if no votes reference the row.
+- **New `candidate.ts` router** (`packages/server/src/routers/candidate.ts`), mounted in `routers/index.ts` as `candidate`. All mutations scoped to `ctx.election.id`.
+  - `list` (authedProcedure) → full roster including soft-deleted, sorted by `displayOrder`.
+  - `add` (tellerProcedure) → trim, reject empty, case-insensitive uniqueness against **active** rows only (re-adding a removed name is fine), `displayOrder = max + 1`.
+  - `update` (tellerProcedure) → trim, reject empty, case-insensitive uniqueness scoped to other active rows, allowed even when `removedAt` is set (typo fix on historical name).
+  - `remove` (tellerProcedure) → soft-delete by default; **hard-delete only when no `votes` row references the candidate**. Idempotent — second remove on an already-soft-deleted row with no votes will hard-delete it.
+- **SSE**: every mutation broadcasts `roster_updated` to both tellers and voters with the **full roster snapshot** (`{ candidates: Candidate[] }`). Clients replace state wholesale.
+- **`election.create`** now persists `electionType` from input and `vacancyCount` (server-side default `1` for by-elections when omitted; `null` for officer).
+- **Shared `Election` type** refactored into a discriminated union (`packages/shared/src/types.ts`):
+  ```ts
+  type Election = ElectionBase & (
+    | { electionType: 'officer';     vacancyCount: null }
+    | { electionType: 'by_election'; vacancyCount: number; candidates: Candidate[] }
+  );
+  ```
+  `bodySize` stays on `ElectionBase`. Officer arm has no `candidates`; by-election arm guarantees both `vacancyCount: number` and `candidates: Candidate[]`.
+- **`getElectionState`** branches on `election.electionType`: by-election arm runs a candidates query and returns the populated array; officer arm skips the query and returns `vacancyCount: null` with no `candidates` field. The DB row stays flat — the union is response-shape only.
 
-Broadcast `roster_updated` SSE event after each mutation, to **both tellers and voters**. Payload is the **full roster snapshot** (all rows including soft-deleted) so clients replace state wholesale — no reducer logic, no drift if an event is missed.
-
-Update `election.ts`: `create` persists `electionType` + `vacancyCount` (default `vacancyCount = 1` server-side when `electionType === 'by_election'` and the client didn't supply one). Refactor the shared `Election` type into a **discriminated union by `electionType`**:
-
-```ts
-type Election = ElectionBase & (
-  | { electionType: 'officer';     vacancyCount: null }
-  | { electionType: 'by_election'; vacancyCount: number; candidates: Candidate[] }
-);
-```
-
-Officer arm has no `candidates` field — voter pool is `participants`. By-election arm guarantees both `vacancyCount: number` (no `| null`) and `candidates: Candidate[]`. `getElectionState` builds the correct arm from the row plus a candidates query (officer mode skips the query). The DB row stays flat — the union is the response shape only.
-
-**Done when:** tellers can add/edit/remove candidates and voters' lists update live via SSE.
+Note: no server-side guard yet against calling `candidate.*` on an officer election. Step 4 will add the `electionType === 'by_election'` guard alongside the round-level branching, since that's where it's actually consumed.
 
 ### 4. `round.ts` branching + UI
 
