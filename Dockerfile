@@ -1,5 +1,5 @@
-FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@latest --activate
+FROM node:24-alpine AS base
+RUN corepack enable && corepack prepare pnpm@10.17.1 --activate
 WORKDIR /app
 
 # Install dependencies
@@ -8,7 +8,7 @@ COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/server/package.json ./packages/server/
 COPY packages/client/package.json ./packages/client/
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN pnpm install --frozen-lockfile
 
 # Build shared
 FROM deps AS build-shared

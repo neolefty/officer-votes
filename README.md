@@ -15,8 +15,8 @@ A real-time voting application for officer elections, designed for Bahá'í-styl
 ## Quick Start
 
 ### Prerequisites
-- Node.js 20+
-- pnpm
+- Node.js 24 LTS (see `.nvmrc`; `nvm use` will pick it up)
+- pnpm 10+
 
 ### Development
 
