@@ -37,6 +37,17 @@ export const VoteSchema = z.object({
   candidateId: z.string().nullable(), // null = abstain
 });
 
+// Change an already-cast ballot to a different candidate (or abstain).
+export const ChangeVoteSchema = z.object({
+  roundId: z.string(),
+  candidateId: z.string().nullable(), // null = abstain
+});
+
+// Withdraw an already-cast ballot, returning the voter to not-voted.
+export const RetractVoteSchema = z.object({
+  roundId: z.string(),
+});
+
 export const EndRoundSchema = z.object({
   roundId: z.string(),
   disclosureLevel: DisclosureLevel,

@@ -15,6 +15,7 @@ export default function Election() {
   const navigate = useNavigate();
   const [showLog, setShowLog] = useState(false);
   const [showLobby, setShowLobby] = useState(false);
+  const [changing, setChanging] = useState(false);
 
   const hasToken = !!getToken();
 
@@ -34,6 +35,7 @@ export default function Election() {
     if (state?.currentRound) {
       setShowLobby(false);
       setShowLog(false);
+      setChanging(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only react to id changes
   }, [state?.currentRound?.id]);
@@ -131,11 +133,26 @@ export default function Election() {
           <Lobby state={state} isTeller={state.isTeller} onAction={() => refetch()} />
         ) : state.currentRound ? (
           state.hasVoted ? (
-            <WaitingForResults
-              state={state}
-              round={state.currentRound}
-              isTeller={state.isTeller}
-            />
+            changing ? (
+              <VotingRound
+                state={state}
+                round={state.currentRound}
+                mode="change"
+                onVoted={() => {
+                  setChanging(false);
+                  refetch();
+                }}
+                onCancel={() => setChanging(false)}
+              />
+            ) : (
+              <WaitingForResults
+                state={state}
+                round={state.currentRound}
+                isTeller={state.isTeller}
+                onChange={() => setChanging(true)}
+                onWithdrawn={() => refetch()}
+              />
+            )
           ) : (
             <VotingRound
               state={state}
@@ -163,11 +180,28 @@ function WaitingForResults({
   state,
   round,
   isTeller,
+  onChange,
+  onWithdrawn,
 }: {
   state: ElectionState;
   round: Round;
   isTeller: boolean;
+  onChange: () => void;
+  onWithdrawn: () => void;
 }) {
+  const [confirmingWithdraw, setConfirmingWithdraw] = useState(false);
+  const retractMutation = trpc.round.retractVote.useMutation();
+
+  const handleWithdraw = async () => {
+    try {
+      await retractMutation.mutateAsync({ roundId: round.id });
+      setConfirmingWithdraw(false);
+      onWithdrawn();
+    } catch (err) {
+      console.error('Failed to withdraw vote:', err);
+    }
+  };
+
   return (
     <div className="text-center py-12">
       <h2 className="text-xl font-semibold mb-2">Voting: {round.office}</h2>
@@ -181,6 +215,52 @@ function WaitingForResults({
       </div>
 
       <p className="text-gray-500">Your vote has been recorded. Waiting for others...</p>
+
+      <div className="mt-6 max-w-xs mx-auto">
+        {confirmingWithdraw ? (
+          <div className="bg-red-50 rounded-lg p-4">
+            <p className="text-sm text-gray-700 mb-3">
+              Withdraw your vote? You&apos;ll return to the voting screen and can vote again.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={handleWithdraw}
+                disabled={retractMutation.isPending}
+                className="flex-1 bg-red-600 text-white py-2 rounded-lg font-medium hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {retractMutation.isPending ? 'Withdrawing...' : 'Withdraw'}
+              </button>
+              <button
+                onClick={() => setConfirmingWithdraw(false)}
+                disabled={retractMutation.isPending}
+                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-200 transition disabled:opacity-50"
+              >
+                Keep vote
+              </button>
+            </div>
+            {retractMutation.error && (
+              <p role="alert" className="text-red-600 text-sm mt-3">
+                {retractMutation.error.message}
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="flex gap-3 justify-center">
+            <button
+              onClick={onChange}
+              className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
+            >
+              Change vote
+            </button>
+            <button
+              onClick={() => setConfirmingWithdraw(true)}
+              className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+            >
+              Withdraw vote
+            </button>
+          </div>
+        )}
+      </div>
 
       {isTeller && state.voterStatus && (
         <div className="mt-8 text-left">

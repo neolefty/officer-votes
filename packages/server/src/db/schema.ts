@@ -41,6 +41,10 @@ export const votes = sqliteTable('votes', {
   id: text('id').primaryKey(),
   roundId: text('round_id').notNull().references(() => rounds.id, { onDelete: 'cascade' }),
   candidateId: text('candidate_id'), // null = abstain
+  // Ephemeral voter linkage: written while the round is `voting` so the voter
+  // can change/withdraw their own ballot, NULLed at closeVoting. Never appears
+  // in any tRPC response or SSE payload. See LONG_RUNNING_ELECTIONS_PLAN.md.
+  participantId: text('participant_id'),
 });
 
 // Track who has voted (separate from vote content)

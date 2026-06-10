@@ -92,9 +92,18 @@ db.run(sql`
   CREATE TABLE IF NOT EXISTS votes (
     id TEXT PRIMARY KEY,
     round_id TEXT NOT NULL REFERENCES rounds(id) ON DELETE CASCADE,
-    candidate_id TEXT
+    candidate_id TEXT,
+    participant_id TEXT
   )
 `);
+
+// Ephemeral voter linkage (change/withdraw support). Nullable + transient:
+// set while voting, nulled at closeVoting. Additive for existing dev DBs.
+try {
+  db.run(sql`ALTER TABLE votes ADD COLUMN participant_id TEXT`);
+} catch {
+  // Column already exists, ignore
+}
 
 db.run(sql`
   CREATE TABLE IF NOT EXISTS vote_records (

@@ -6,6 +6,11 @@ interface VotingRoundProps {
   state: ElectionState;
   round: Round;
   onVoted: () => void;
+  // 'change' re-points an already-cast ballot via round.changeVote; default
+  // 'vote' casts a first ballot. onCancel, when provided, offers a way back to
+  // the waiting view without altering the ballot.
+  mode?: 'vote' | 'change';
+  onCancel?: () => void;
 }
 
 interface CandidateOption {
@@ -38,13 +43,24 @@ function getCandidateOptions(state: ElectionState, round: Round): CandidateOptio
     .sort(byName);
 }
 
-export default function VotingRound({ state, round, onVoted }: VotingRoundProps) {
+export default function VotingRound({
+  state,
+  round,
+  onVoted,
+  mode = 'vote',
+  onCancel,
+}: VotingRoundProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [isAbstain, setIsAbstain] = useState(false);
+  const isChange = mode === 'change';
 
   const voteMutation = trpc.round.vote.useMutation({
     onSuccess: () => onVoted(),
   });
+  const changeMutation = trpc.round.changeVote.useMutation({
+    onSuccess: () => onVoted(),
+  });
+  const activeMutation = isChange ? changeMutation : voteMutation;
 
   const options = getCandidateOptions(state, round);
   const isByElection = state.election.electionType === 'by_election';
@@ -53,7 +69,7 @@ export default function VotingRound({ state, round, onVoted }: VotingRoundProps)
 
   const handleVote = () => {
     if (!isAbstain && !selected) return;
-    voteMutation.mutate({
+    activeMutation.mutate({
       roundId: round.id,
       candidateId: isAbstain ? null : selected,
     });
@@ -89,6 +105,11 @@ export default function VotingRound({ state, round, onVoted }: VotingRoundProps)
         {isRunoff && (
           <p className="text-sm text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mt-3 inline-block">
             Runoff round — only listed candidates are eligible
+          </p>
+        )}
+        {isChange && (
+          <p className="text-sm text-blue-700 bg-blue-50 rounded-lg px-3 py-2 mt-3 inline-block">
+            Changing your vote — your previous choice will be replaced
           </p>
         )}
       </div>
@@ -138,12 +159,27 @@ export default function VotingRound({ state, round, onVoted }: VotingRoundProps)
       <button
         type="submit"
         onClick={handleVote}
-        disabled={voteMutation.isPending || (!selected && !isAbstain)}
+        disabled={activeMutation.isPending || (!selected && !isAbstain)}
         aria-describedby={selectedName ? 'vote-selection' : undefined}
         className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {voteMutation.isPending ? 'Submitting...' : 'Submit Vote'}
+        {activeMutation.isPending
+          ? 'Submitting...'
+          : isChange
+            ? 'Update Vote'
+            : 'Submit Vote'}
       </button>
+
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={activeMutation.isPending}
+          className="w-full mt-3 py-2 px-4 text-gray-600 rounded-lg font-medium hover:bg-gray-100 transition disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      )}
 
       {selectedName && (
         <p id="vote-selection" className="sr-only">
@@ -151,9 +187,9 @@ export default function VotingRound({ state, round, onVoted }: VotingRoundProps)
         </p>
       )}
 
-      {voteMutation.error && (
+      {activeMutation.error && (
         <p role="alert" className="text-red-600 text-sm mt-2">
-          {voteMutation.error.message}
+          {activeMutation.error.message}
         </p>
       )}
     </div>
