@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { nanoid } from 'nanoid';
 import {
   seed,
   unauthedCaller,
@@ -6,6 +7,7 @@ import {
   voteRecordsForRound,
   expectTRPCError,
 } from '../test/harness.js';
+import { insertVoteIfRoundOpen } from './round.js';
 
 describe('round.vote', () => {
   it('records a ballot and a participation record', async () => {
@@ -68,5 +70,61 @@ describe('round.vote', () => {
       unauthedCaller().round.vote({ roundId: s.round!.id, candidateId: null }),
       'UNAUTHORIZED'
     );
+  });
+});
+
+// TESTING_PLAN.md case 18: a vote whose status-guard read passed while the
+// round was open must not land its insert after closeVoting has nulled the
+// linkage. White-box: the insert step is exercised directly in the ordering
+// the race produces, since better-sqlite3's sync driver makes true
+// interleaving hard to provoke.
+describe('first-cast vote vs close race', () => {
+  it('the conditional insert lands while the round is open', async () => {
+    const s = await seed();
+    const landed = await insertVoteIfRoundOpen({
+      id: nanoid(),
+      roundId: s.round!.id,
+      candidateId: s.teller.id,
+      participantId: s.voters[0].id,
+    });
+
+    expect(landed).toBe(true);
+    const votes = await votesForRound(s.round!.id);
+    expect(votes).toHaveLength(1);
+    expect(votes[0].participantId).toBe(s.voters[0].id);
+  });
+
+  it('a late insert after close is rejected and leaves no linked ballot', async () => {
+    const s = await seed();
+    // The racing vote already passed its status guard; close completes first.
+    await s.callerFor(s.teller).round.closeVoting({ roundId: s.round!.id });
+
+    const landed = await insertVoteIfRoundOpen({
+      id: nanoid(),
+      roundId: s.round!.id,
+      candidateId: s.teller.id,
+      participantId: s.voters[0].id,
+    });
+
+    expect(landed).toBe(false);
+    // Standing invariant: the closed round holds no ballot at all from the
+    // late vote, linked or otherwise.
+    expect(await votesForRound(s.round!.id)).toHaveLength(0);
+    expect(await voteRecordsForRound(s.round!.id)).toHaveLength(0);
+  });
+
+  it('a late insert on a cancelled round is rejected', async () => {
+    const s = await seed();
+    await s.callerFor(s.teller).round.cancel({ roundId: s.round!.id });
+
+    const landed = await insertVoteIfRoundOpen({
+      id: nanoid(),
+      roundId: s.round!.id,
+      candidateId: s.teller.id,
+      participantId: s.voters[0].id,
+    });
+
+    expect(landed).toBe(false);
+    expect(await votesForRound(s.round!.id)).toHaveLength(0);
   });
 });

@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { nanoid } from 'nanoid';
-import { eq, and, isNull, inArray } from 'drizzle-orm';
+import { eq, and, isNull, inArray, sql } from 'drizzle-orm';
 import { router, authedProcedure, tellerProcedure } from '../trpc.js';
 import { db, schema } from '../db/index.js';
 import {
@@ -85,6 +85,29 @@ async function broadcastVoteStatus(
   });
 
   return { votedCount, totalParticipants };
+}
+
+// Insert a first-cast ballot only if the round is still open, as one atomic
+// statement. A plain insert can interleave with closeVoting: the status guard
+// reads 'voting', close flips status and nulls the linkage, then the insert
+// lands — stranding a participant_id on a closed round and violating the
+// anonymity invariant. SQLite serializes writers, so this either lands before
+// close (and gets nulled with the rest) or sees the closed status and no-ops.
+// Returns whether the ballot landed.
+export async function insertVoteIfRoundOpen(vote: {
+  id: string;
+  roundId: string;
+  candidateId: string | null;
+  participantId: string;
+}): Promise<boolean> {
+  const result = await db.run(sql`
+    INSERT INTO votes (id, round_id, candidate_id, participant_id)
+    SELECT ${vote.id}, ${vote.roundId}, ${vote.candidateId}, ${vote.participantId}
+    WHERE EXISTS (SELECT 1 FROM rounds WHERE id = ${vote.roundId} AND status = 'voting')
+  `);
+  // rows-affected is `.changes` on better-sqlite3 but `.rowsAffected` on libsql
+  const affected = result as { changes?: number; rowsAffected?: number };
+  return (affected.changes ?? affected.rowsAffected ?? 0) > 0;
 }
 
 export const roundRouter = router({
@@ -204,13 +227,22 @@ export const roundRouter = router({
 
       // Insert vote with the ephemeral voter linkage so the voter can later
       // change/withdraw it. participantId is nulled at closeVoting and is never
-      // included in any response or broadcast payload.
-      await db.insert(schema.votes).values({
+      // included in any response or broadcast payload. Conditional on the round
+      // still being open so a vote racing closeVoting can't strand a linked
+      // ballot on a closed round.
+      const inserted = await insertVoteIfRoundOpen({
         id: nanoid(),
         roundId: input.roundId,
         candidateId: input.candidateId,
         participantId: ctx.participant.id,
       });
+
+      if (!inserted) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Voting just closed — your vote was not recorded',
+        });
+      }
 
       // Record that this participant voted
       await db.insert(schema.voteRecords).values({
