@@ -136,6 +136,13 @@ export async function runMigrations(
     // Column already exists, ignore
   }
 
+  // Round closing time (soft deadline; locks changes, voting stays open)
+  try {
+    await db.run(sql`ALTER TABLE rounds ADD COLUMN closes_at INTEGER`);
+  } catch {
+    // Column already exists, ignore
+  }
+
   // By-election candidate roster (separate from participants)
   await db.run(sql`
     CREATE TABLE IF NOT EXISTS candidates (

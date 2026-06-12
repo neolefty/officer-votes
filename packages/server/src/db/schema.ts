@@ -34,6 +34,10 @@ export const rounds = sqliteTable('rounds', {
   eligibleCandidateIds: text('eligible_candidate_ids'),
   status: text('status', { enum: ['voting', 'closed', 'revealed', 'cancelled'] }).notNull(),
   disclosureLevel: text('disclosure_level', { enum: ['top', 'top_no_count', 'all', 'none'] }),
+  // unix ms; teller-set soft deadline. Once passed, vote changes/withdrawals
+  // lock ("ending soon") but first-time votes stay accepted until closeVoting.
+  // NOT a status: locked is derived as closesAt != null && now >= closesAt.
+  closesAt: integer('closes_at'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 
