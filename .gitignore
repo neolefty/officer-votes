@@ -10,3 +10,4 @@ dist/
 .DS_Store
 .pnpmrc.json
 prompt.txt
+__pycache__/

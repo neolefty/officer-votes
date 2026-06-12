@@ -1,0 +1,17 @@
+{
+  "//": "Template for /etc/pr-preview/officer-votes.json. setup-root.sh copies it there, replacing __PREVIEW_KEY__ with a generated secret. Nothing else here is secret.",
+  "project": "officer-votes",
+  "repo": "neolefty/officer-votes",
+  "domain": "preview.wlbahai.org",
+  "port_base": 4000,
+  "internal_port": 8080,
+  "preview_key": "__PREVIEW_KEY__",
+  "caddy_dir": "/etc/caddy/preview",
+  "state_dir": "~/.local/state/pr-preview/officer-votes",
+  "data_mount": "/app/data",
+  "env": {
+    "DATABASE_URL": "/app/data/election.db"
+  },
+  "memory": "1g",
+  "cpus": "1"
+}
