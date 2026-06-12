@@ -8,6 +8,8 @@ import {
   JoinElectionSchema,
   PromoteToTellerSchema,
   SetBodySizeSchema,
+  DisqualifyVoterSchema,
+  ReinstateVoterSchema,
   ELECTION_CODE_LENGTH,
   TOKEN_LENGTH,
   ELECTION_EXPIRY_DAYS,
@@ -15,6 +17,7 @@ import {
 import { sseManager } from '../sse.js';
 import { getElectionState } from '../utils.js';
 import { maybeCleanupExpired } from '../cleanup.js';
+import { broadcastVoteStatus } from './round.js';
 
 const generateCode = customAlphabet('ABCDEFGHJKLMNPQRSTUVWXYZ23456789', ELECTION_CODE_LENGTH);
 const generateToken = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', TOKEN_LENGTH);
@@ -176,6 +179,14 @@ export const electionRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND' });
       }
 
+      // Tellers can't be disqualified, so a disqualified row can't become one.
+      if (target.disqualifiedAt !== null) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot promote a disqualified participant — reinstate them first',
+        });
+      }
+
       await db
         .update(schema.participants)
         .set({ role: 'teller' })
@@ -217,6 +228,119 @@ export const electionRouter = router({
 
     return { success: true };
   }),
+
+  // Mid-round-capable: sets disqualifiedAt FIRST (so a racing vote/changeVote/
+  // retractVote is rejected by round.ts's requireNotDisqualified or the atomic
+  // insert condition), then sweeps any open-round ballot. A closed round's
+  // votes are already anonymized and counted — DQ never alters a closed tally.
+  disqualifyVoter: tellerProcedure
+    .input(DisqualifyVoterSchema)
+    .mutation(async ({ input, ctx }) => {
+      const target = await db.query.participants.findFirst({
+        where: and(
+          eq(schema.participants.id, input.participantId),
+          eq(schema.participants.electionId, ctx.election.id)
+        ),
+      });
+
+      if (!target) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+      if (target.id === ctx.participant.id) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'You cannot disqualify yourself',
+        });
+      }
+      if (target.role === 'teller') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Cannot disqualify a teller — they must step down first',
+        });
+      }
+
+      const disqualifiedAt = target.disqualifiedAt ?? Date.now();
+      await db
+        .update(schema.participants)
+        .set({ disqualifiedAt })
+        .where(eq(schema.participants.id, target.id));
+
+      // Retract any ballot in the currently open round via the ephemeral
+      // linkage. (Once a round closes, the linkage is nulled and the vote is
+      // part of the tally — nothing to retract.)
+      const votingRound = await db.query.rounds.findFirst({
+        where: and(
+          eq(schema.rounds.electionId, ctx.election.id),
+          eq(schema.rounds.status, 'voting')
+        ),
+      });
+      if (votingRound) {
+        await db
+          .delete(schema.votes)
+          .where(
+            and(
+              eq(schema.votes.roundId, votingRound.id),
+              eq(schema.votes.participantId, target.id)
+            )
+          );
+        await db
+          .delete(schema.voteRecords)
+          .where(
+            and(
+              eq(schema.voteRecords.roundId, votingRound.id),
+              eq(schema.voteRecords.participantId, target.id)
+            )
+          );
+        await broadcastVoteStatus(ctx.election.id, votingRound.id);
+      }
+
+      sseManager.broadcast(ctx.election.id, 'participant_updated', {
+        id: target.id,
+        disqualifiedAt,
+      });
+
+      return { success: true };
+    }),
+
+  // Their ballot and voteRecord were deleted on disqualify, so if the round is
+  // still open they can simply vote fresh.
+  reinstateVoter: tellerProcedure
+    .input(ReinstateVoterSchema)
+    .mutation(async ({ input, ctx }) => {
+      const target = await db.query.participants.findFirst({
+        where: and(
+          eq(schema.participants.id, input.participantId),
+          eq(schema.participants.electionId, ctx.election.id)
+        ),
+      });
+
+      if (!target) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      await db
+        .update(schema.participants)
+        .set({ disqualifiedAt: null })
+        .where(eq(schema.participants.id, target.id));
+
+      // Reinstatement changes the participation denominator mid-round.
+      const votingRound = await db.query.rounds.findFirst({
+        where: and(
+          eq(schema.rounds.electionId, ctx.election.id),
+          eq(schema.rounds.status, 'voting')
+        ),
+      });
+      if (votingRound) {
+        await broadcastVoteStatus(ctx.election.id, votingRound.id);
+      }
+
+      sseManager.broadcast(ctx.election.id, 'participant_updated', {
+        id: target.id,
+        disqualifiedAt: null,
+      });
+
+      return { success: true };
+    }),
 
   setBodySize: tellerProcedure
     .input(SetBodySizeSchema)

@@ -35,6 +35,7 @@ function getCandidateOptions(state: ElectionState, round: Round): CandidateOptio
     return options.sort(byName);
   }
   return state.participants
+    .filter((p) => p.disqualifiedAt === null)
     .map((p) => ({
       id: p.id,
       name: p.name,

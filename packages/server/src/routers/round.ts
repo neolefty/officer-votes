@@ -51,16 +51,36 @@ async function validateCandidate(
         eq(schema.participants.electionId, electionId)
       ),
     });
-    if (!candidate) {
+    if (!candidate || candidate.disqualifiedAt !== null) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid candidate' });
     }
   }
 }
 
+// Disqualified voters may not cast, change, or retract a ballot. Re-reads the
+// participant row rather than trusting ctx (which was loaded at request start)
+// so a just-landed disqualification is seen — this is the loser-of-the-race
+// resolver for DQ vs vote: disqualifyVoter sets disqualifiedAt before deleting
+// the ballot, so a racing mutation is either rejected here or its ballot is
+// swept up by the delete.
+async function requireNotDisqualified(participantId: string): Promise<void> {
+  const participant = await db.query.participants.findFirst({
+    where: eq(schema.participants.id, participantId),
+  });
+  if (!participant || participant.disqualifiedAt !== null) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'You have been disqualified from voting in this election',
+    });
+  }
+}
+
 // Recompute participation from voteRecords and broadcast vote_status to all
-// clients. Counts adjust automatically for change (no-op count) and withdraw
-// (count drops). Returns the fresh counts for the caller.
-async function broadcastVoteStatus(
+// clients. Counts adjust automatically for change (no-op count), withdraw, and
+// disqualification (count drops; disqualified participants leave the
+// denominator). Returns the fresh counts for the caller. Exported for
+// election.disqualifyVoter, which retracts a ballot mid-round.
+export async function broadcastVoteStatus(
   electionId: string,
   roundId: string
 ): Promise<{ votedCount: number; totalParticipants: number }> {
@@ -70,15 +90,16 @@ async function broadcastVoteStatus(
   const participants = await db.query.participants.findMany({
     where: eq(schema.participants.electionId, electionId),
   });
+  const active = participants.filter((p) => p.disqualifiedAt === null);
 
   const votedCount = voteRecords.length;
-  const totalParticipants = participants.length;
+  const totalParticipants = active.length;
 
   sseManager.broadcast(electionId, 'vote_status', {
     roundId,
     votedCount,
     totalParticipants,
-    voterStatus: participants.map((p) => ({
+    voterStatus: active.map((p) => ({
       participantId: p.id,
       hasVoted: voteRecords.some((r) => r.participantId === p.id),
     })),
@@ -87,13 +108,15 @@ async function broadcastVoteStatus(
   return { votedCount, totalParticipants };
 }
 
-// Insert a first-cast ballot only if the round is still open, as one atomic
-// statement. A plain insert can interleave with closeVoting: the status guard
-// reads 'voting', close flips status and nulls the linkage, then the insert
-// lands — stranding a participant_id on a closed round and violating the
-// anonymity invariant. SQLite serializes writers, so this either lands before
-// close (and gets nulled with the rest) or sees the closed status and no-ops.
-// Returns whether the ballot landed.
+// Insert a first-cast ballot only if the round is still open and the voter is
+// not disqualified, as one atomic statement. A plain insert can interleave
+// with closeVoting: the status guard reads 'voting', close flips status and
+// nulls the linkage, then the insert lands — stranding a participant_id on a
+// closed round and violating the anonymity invariant. The same shape covers a
+// vote racing disqualifyVoter, whose ballot sweep would otherwise miss an
+// insert landing just after it. SQLite serializes writers, so this either
+// lands before close/DQ (and is nulled or swept with the rest) or sees the
+// new state and no-ops. Returns whether the ballot landed.
 export async function insertVoteIfRoundOpen(vote: {
   id: string;
   roundId: string;
@@ -104,6 +127,7 @@ export async function insertVoteIfRoundOpen(vote: {
     INSERT INTO votes (id, round_id, candidate_id, participant_id)
     SELECT ${vote.id}, ${vote.roundId}, ${vote.candidateId}, ${vote.participantId}
     WHERE EXISTS (SELECT 1 FROM rounds WHERE id = ${vote.roundId} AND status = 'voting')
+      AND EXISTS (SELECT 1 FROM participants WHERE id = ${vote.participantId} AND disqualified_at IS NULL)
   `);
   // rows-affected is `.changes` on better-sqlite3 but `.rowsAffected` on libsql
   const affected = result as { changes?: number; rowsAffected?: number };
@@ -203,6 +227,8 @@ export const roundRouter = router({
         });
       }
 
+      await requireNotDisqualified(ctx.participant.id);
+
       // Check if already voted
       const existingRecord = await db.query.voteRecords.findFirst({
         where: and(
@@ -285,6 +311,8 @@ export const roundRouter = router({
         });
       }
 
+      await requireNotDisqualified(ctx.participant.id);
+
       // Must have an existing ballot in this round to change it.
       const existingRecord = await db.query.voteRecords.findFirst({
         where: and(
@@ -343,6 +371,8 @@ export const roundRouter = router({
           message: 'Round not found or no longer accepting changes',
         });
       }
+
+      await requireNotDisqualified(ctx.participant.id);
 
       const existingRecord = await db.query.voteRecords.findFirst({
         where: and(

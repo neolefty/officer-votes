@@ -29,6 +29,10 @@ export async function getElectionState(
     orderBy: schema.participants.createdAt,
   });
 
+  // Disqualified participants stay in the list (so tellers can reinstate and
+  // past tallies resolve names) but leave the participation denominator.
+  const activeParticipants = participants.filter((p) => p.disqualifiedAt === null);
+
   const rounds = await db.query.rounds.findMany({
     where: eq(schema.rounds.electionId, election.id),
     orderBy: desc(schema.rounds.createdAt),
@@ -59,7 +63,7 @@ export async function getElectionState(
     hasVoted = voteRecords.some((r) => r.participantId === participant.id);
 
     if (participant.role === 'teller') {
-      voterStatus = participants.map((p) => ({
+      voterStatus = activeParticipants.map((p) => ({
         participantId: p.id,
         hasVoted: voteRecords.some((r) => r.participantId === p.id),
       }));
@@ -128,6 +132,7 @@ export async function getElectionState(
       id: p.id,
       name: p.name,
       role: p.role,
+      disqualifiedAt: p.disqualifiedAt,
       joinedAt: p.createdAt.toISOString(),
     })),
     currentParticipantId: participant.id,
@@ -135,7 +140,7 @@ export async function getElectionState(
     currentRound: currentRound ? formatRound(currentRound) : null,
     pendingRound: pendingRound ? formatRound(pendingRound) : null,
     votedCount,
-    totalParticipants: participants.length,
+    totalParticipants: activeParticipants.length,
     hasVoted,
     voterStatus,
     result,

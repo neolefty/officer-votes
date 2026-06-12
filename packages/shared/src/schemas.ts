@@ -66,6 +66,16 @@ export const PromoteToTellerSchema = z.object({
   participantId: z.string(),
 });
 
+// Disqualify a voter (mid-round capable: retracts any open-round ballot).
+export const DisqualifyVoterSchema = z.object({
+  participantId: z.string(),
+});
+
+// Clear a disqualification; the voter may vote fresh if a round is open.
+export const ReinstateVoterSchema = z.object({
+  participantId: z.string(),
+});
+
 export const SetBodySizeSchema = z.object({
   bodySize: z.number().int().min(1).max(100).nullable(),
 });
