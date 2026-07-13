@@ -41,6 +41,25 @@ export default function Lobby({ state, isTeller, onAction }: LobbyProps) {
     },
   });
 
+  const disqualifyMutation = trpc.election.disqualifyVoter.useMutation({
+    onSuccess: () => onAction(),
+  });
+
+  const reinstateMutation = trpc.election.reinstateVoter.useMutation({
+    onSuccess: () => onAction(),
+  });
+
+  const handleDisqualify = (participantId: string, name: string) => {
+    const hasVotedInOpenRound =
+      state.currentRound !== null &&
+      state.voterStatus?.some((v) => v.participantId === participantId && v.hasVoted);
+    const message = hasVotedInOpenRound
+      ? `Disqualify ${name}? Their vote in the current round will be retracted and cannot be recovered.`
+      : `Disqualify ${name}? They will not be able to vote until reinstated.`;
+    if (!confirm(message)) return;
+    disqualifyMutation.mutate({ participantId });
+  };
+
   const tellerCount = state.participants.filter((p) => p.role === 'teller').length;
   const canStepDown = isTeller && tellerCount > 1;
 
@@ -82,6 +101,7 @@ export default function Lobby({ state, isTeller, onAction }: LobbyProps) {
           {state.participants.map((p) => {
             const isMe = p.id === state.currentParticipantId;
             const isTellerRole = p.role === 'teller';
+            const isDisqualified = p.disqualifiedAt !== null;
             const hasActions = isMe || (isTeller && !isTellerRole);
 
             return (
@@ -130,9 +150,16 @@ export default function Lobby({ state, isTeller, onAction }: LobbyProps) {
                     </form>
                   ) : (
                     <>
-                      <span>{p.name}</span>
+                      <span className={isDisqualified ? 'text-gray-400 line-through' : ''}>
+                        {p.name}
+                      </span>
                       {isMe && <span className="text-sm text-gray-500">(Me)</span>}
                       {isTellerRole && <span className="text-sm text-gray-500">(Teller)</span>}
+                      {isDisqualified && (
+                        <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded">
+                          Disqualified
+                        </span>
+                      )}
                     </>
                   )}
                 </div>
@@ -160,7 +187,7 @@ export default function Lobby({ state, isTeller, onAction }: LobbyProps) {
                         Step Down as Teller
                       </button>
                     )}
-                    {!isTellerRole && isTeller && (
+                    {!isTellerRole && isTeller && !isDisqualified && (
                       <button
                         onClick={() => promoteMutation.mutate({ participantId: p.id })}
                         disabled={promoteMutation.isPending}
@@ -168,6 +195,25 @@ export default function Lobby({ state, isTeller, onAction }: LobbyProps) {
                       >
                         Make Teller
                       </button>
+                    )}
+                    {!isTellerRole && isTeller && !isMe && (
+                      isDisqualified ? (
+                        <button
+                          onClick={() => reinstateMutation.mutate({ participantId: p.id })}
+                          disabled={reinstateMutation.isPending}
+                          className="text-xs text-blue-600 hover:text-blue-800 disabled:opacity-50 py-2 px-3 sm:py-0 sm:px-0 bg-blue-50 sm:bg-transparent rounded-lg sm:rounded-none hover:bg-blue-100 sm:hover:bg-transparent"
+                        >
+                          Reinstate
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleDisqualify(p.id, p.name)}
+                          disabled={disqualifyMutation.isPending}
+                          className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50 py-2 px-3 sm:py-0 sm:px-0 bg-red-50 sm:bg-transparent rounded-lg sm:rounded-none hover:bg-red-100 sm:hover:bg-transparent"
+                        >
+                          Disqualify
+                        </button>
+                      )
                     )}
                   </div>
                 )}

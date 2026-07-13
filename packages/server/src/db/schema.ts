@@ -17,6 +17,9 @@ export const participants = sqliteTable('participants', {
   name: text('name').notNull(),
   role: text('role', { enum: ['teller', 'voter'] }).notNull(),
   token: text('token').notNull().unique(),
+  // unix ms; null = active. Set by teller disqualify (which also retracts any
+  // open-round ballot), cleared by reinstate. See LONG_RUNNING_ELECTIONS_PLAN.md.
+  disqualifiedAt: integer('disqualified_at'),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 });
 

@@ -79,6 +79,9 @@ export default function Election() {
     return null;
   }
 
+  const me = state.participants.find((p) => p.id === state.currentParticipantId);
+  const amDisqualified = me?.disqualifiedAt != null;
+
 
   return (
     <div className="min-h-screen pb-20">
@@ -131,6 +134,8 @@ export default function Election() {
           <ElectionLog roundLog={state.roundLog} onClose={() => setShowLog(false)} />
         ) : showLobby ? (
           <Lobby state={state} isTeller={state.isTeller} onAction={() => refetch()} />
+        ) : amDisqualified ? (
+          <DisqualifiedNotice />
         ) : state.currentRound ? (
           state.hasVoted ? (
             changing ? (
@@ -172,6 +177,23 @@ export default function Election() {
       {state.isTeller && !showLog && (
         <TellerControls state={state} onAction={() => refetch()} />
       )}
+    </div>
+  );
+}
+
+function DisqualifiedNotice() {
+  return (
+    <div className="text-center py-12">
+      <div className="bg-red-50 rounded-xl p-6 max-w-md mx-auto">
+        <h2 className="text-lg font-semibold text-red-700 mb-2">
+          You have been disqualified
+        </h2>
+        <p className="text-gray-600">
+          A teller has disqualified you from voting in this election. If you
+          believe this is a mistake, please contact a teller — they can
+          reinstate you.
+        </p>
+      </div>
     </div>
   );
 }
@@ -266,7 +288,7 @@ function WaitingForResults({
         <div className="mt-8 text-left">
           <h3 className="font-medium mb-3">Voting Status</h3>
           <div className="space-y-2">
-            {state.participants.map((p) => {
+            {state.participants.filter((p) => p.disqualifiedAt === null).map((p) => {
               const status = state.voterStatus?.find((v) => v.participantId === p.id);
               return (
                 <div

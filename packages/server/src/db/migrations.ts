@@ -39,9 +39,17 @@ export async function runMigrations(
       name TEXT NOT NULL,
       role TEXT NOT NULL CHECK (role IN ('teller', 'voter')),
       token TEXT NOT NULL UNIQUE,
+      disqualified_at INTEGER,
       created_at INTEGER NOT NULL
     )
   `);
+
+  // Teller disqualification (mid-round capable). Additive for existing DBs.
+  try {
+    await db.run(sql`ALTER TABLE participants ADD COLUMN disqualified_at INTEGER`);
+  } catch {
+    // Column already exists, ignore
+  }
 
   await db.run(sql`
     CREATE TABLE IF NOT EXISTS rounds (

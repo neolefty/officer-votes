@@ -37,6 +37,7 @@ export interface Participant {
   id: string;
   name: string;
   role: ParticipantRole;
+  disqualifiedAt: number | null; // unix ms; null = active
   joinedAt: string;
 }
 
