@@ -145,6 +145,7 @@ export async function getElectionState(
     voterStatus,
     result,
     roundLog,
+    serverNow: Date.now(),
   };
 }
 
@@ -257,6 +258,7 @@ function formatRound(round: typeof schema.rounds.$inferSelect) {
       : null,
     status: round.status,
     disclosureLevel: round.disclosureLevel,
+    closesAt: round.closesAt,
     createdAt: round.createdAt.toISOString(),
   };
 }

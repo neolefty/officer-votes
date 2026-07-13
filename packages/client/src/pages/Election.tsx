@@ -9,6 +9,8 @@ import VotingRound from '../components/VotingRound';
 import RoundResults from '../components/RoundResults';
 import TellerControls from '../components/TellerControls';
 import ElectionLog from '../components/ElectionLog';
+import ClosingTimeBanner from '../components/ClosingTimeBanner';
+import { useClosingTime } from '../hooks/useClosingTime';
 
 export default function Election() {
   const { code } = useParams<{ code: string }>();
@@ -30,6 +32,8 @@ export default function Election() {
 
   useSSE(hasToken ? code : undefined, handleSSEEvent);
 
+  const closing = useClosingTime(state, state?.currentRound);
+
   // Close overlay views when a new round starts
   useEffect(() => {
     if (state?.currentRound) {
@@ -39,6 +43,14 @@ export default function Election() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only react to id changes
   }, [state?.currentRound?.id]);
+
+  // If the lock lands while a voter is mid-change, bounce back to the waiting
+  // view (the server would reject the change anyway).
+  useEffect(() => {
+    if (closing.isLocked) {
+      setChanging(false);
+    }
+  }, [closing.isLocked]);
 
   const handleJoined = (token: string) => {
     setToken(code!, token);
@@ -130,6 +142,14 @@ export default function Election() {
       </header>
 
       <main className="max-w-2xl mx-auto px-4 py-6">
+        {state.currentRound && !showLog && !showLobby && !amDisqualified && (
+          <ClosingTimeBanner
+            round={state.currentRound}
+            closing={closing}
+            isTeller={state.isTeller}
+            onAction={() => refetch()}
+          />
+        )}
         {showLog ? (
           <ElectionLog roundLog={state.roundLog} onClose={() => setShowLog(false)} />
         ) : showLobby ? (
@@ -154,6 +174,7 @@ export default function Election() {
                 state={state}
                 round={state.currentRound}
                 isTeller={state.isTeller}
+                locked={closing.isLocked}
                 onChange={() => setChanging(true)}
                 onWithdrawn={() => refetch()}
               />
@@ -202,12 +223,14 @@ function WaitingForResults({
   state,
   round,
   isTeller,
+  locked,
   onChange,
   onWithdrawn,
 }: {
   state: ElectionState;
   round: Round;
   isTeller: boolean;
+  locked: boolean;
   onChange: () => void;
   onWithdrawn: () => void;
 }) {
@@ -238,6 +261,7 @@ function WaitingForResults({
 
       <p className="text-gray-500">Your vote has been recorded. Waiting for others...</p>
 
+      {locked ? null : (
       <div className="mt-6 max-w-xs mx-auto">
         {confirmingWithdraw ? (
           <div className="bg-red-50 rounded-lg p-4">
@@ -283,6 +307,7 @@ function WaitingForResults({
           </div>
         )}
       </div>
+      )}
 
       {isTeller && state.voterStatus && (
         <div className="mt-8 text-left">

@@ -61,6 +61,13 @@ export const CloseVotingSchema = z.object({
   roundId: z.string(),
 });
 
+// Set, extend, or clear (null) a round's soft closing time (unix ms).
+// "Lock now" = closesAt set to the current server time.
+export const SetRoundClosesAtSchema = z.object({
+  roundId: z.string(),
+  closesAt: z.number().int().positive().nullable(),
+});
+
 // Teller actions
 export const PromoteToTellerSchema = z.object({
   participantId: z.string(),

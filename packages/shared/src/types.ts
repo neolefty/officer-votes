@@ -49,6 +49,9 @@ export interface Round {
   eligibleCandidateIds: string[] | null;
   status: RoundStatus;
   disclosureLevel: DisclosureLevel | null;
+  // unix ms; teller-set soft deadline. Past it, changes lock but first-time
+  // votes are still accepted until the teller closes voting.
+  closesAt: number | null;
   createdAt: string;
 }
 
@@ -121,6 +124,9 @@ export interface ElectionState {
   voterStatus?: VoterStatus[];
   result?: RoundResult;
   roundLog: RoundLogEntry[];
+  // Server clock at response time (unix ms) so clients can run closing-time
+  // countdowns without trusting local clock skew.
+  serverNow: number;
 }
 
 export interface RoundLogEntry {

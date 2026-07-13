@@ -11,6 +11,7 @@ import {
   EndRoundSchema,
   CancelRoundSchema,
   CloseVotingSchema,
+  SetRoundClosesAtSchema,
   selectWinners,
 } from '@officer-election/shared';
 import type { CloseVotingResult } from '@officer-election/shared';
@@ -54,6 +55,19 @@ async function validateCandidate(
     if (!candidate || candidate.disqualifiedAt !== null) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid candidate' });
     }
+  }
+}
+
+// "Ending soon" soft lock: once a teller-set closing time passes, vote
+// changes/withdrawals are rejected but first-time votes stay accepted until
+// closeVoting. Derived from the server clock at mutation time — not a round
+// status — so there is no extra state transition to audit.
+function requireNotLocked(round: { closesAt: number | null }): void {
+  if (round.closesAt !== null && Date.now() >= round.closesAt) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Voting is closing soon — vote changes are locked',
+    });
   }
 }
 
@@ -201,6 +215,7 @@ export const roundRouter = router({
         eligibleCandidateIds,
         status: 'voting' as const,
         disclosureLevel: null,
+        closesAt: null,
         createdAt: now.toISOString(),
       };
 
@@ -311,6 +326,7 @@ export const roundRouter = router({
         });
       }
 
+      requireNotLocked(round);
       await requireNotDisqualified(ctx.participant.id);
 
       // Must have an existing ballot in this round to change it.
@@ -372,6 +388,7 @@ export const roundRouter = router({
         });
       }
 
+      requireNotLocked(round);
       await requireNotDisqualified(ctx.participant.id);
 
       const existingRecord = await db.query.voteRecords.findFirst({
@@ -402,6 +419,38 @@ export const roundRouter = router({
       await db.delete(schema.voteRecords).where(eq(schema.voteRecords.id, existingRecord.id));
 
       await broadcastVoteStatus(ctx.election.id, input.roundId);
+
+      return { success: true };
+    }),
+
+  // Set, extend, or clear (null) the round's soft closing time on the fly.
+  // "Lock now" = closesAt set to the current server time. The deadline never
+  // closes voting by itself — the teller still clicks Close — it only locks
+  // changes/withdrawals once passed (see requireNotLocked).
+  setClosesAt: tellerProcedure
+    .input(SetRoundClosesAtSchema)
+    .mutation(async ({ input, ctx }) => {
+      const round = await db.query.rounds.findFirst({
+        where: and(
+          eq(schema.rounds.id, input.roundId),
+          eq(schema.rounds.electionId, ctx.election.id),
+          eq(schema.rounds.status, 'voting')
+        ),
+      });
+
+      if (!round) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Round not found or not in voting status' });
+      }
+
+      await db
+        .update(schema.rounds)
+        .set({ closesAt: input.closesAt })
+        .where(eq(schema.rounds.id, input.roundId));
+
+      sseManager.broadcast(ctx.election.id, 'round_updated', {
+        roundId: input.roundId,
+        closesAt: input.closesAt,
+      });
 
       return { success: true };
     }),
