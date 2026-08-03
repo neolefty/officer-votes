@@ -60,6 +60,16 @@ SQLite in dev, Turso in prod.
 Design docs for in-flight work live in `*_PLAN.md` / `*_DESIGN.md` at the repo root (note:
 several phases there are planned, not yet shipped).
 
+## PR previews
+
+Every open non-fork PR gets a live test instance at
+`https://pr-<number>.preview.wlbahai.org` (keyed link in a sticky PR comment),
+deployed by a reconciler on the home server within ~3 minutes of a push and torn
+down on close. See `scripts/preview/README.md` for architecture and operations.
+Previews are keyed on PR number, so branch names need no DNS-related conventions.
+For interactive multi-device testing of a change, push a PR and use its preview
+link rather than localhost.
+
 ## Review guidelines
 
 - Flag any code path that could leak `votes.participantId` or otherwise tie a ballot to a

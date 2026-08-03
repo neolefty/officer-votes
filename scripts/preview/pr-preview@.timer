@@ -1,0 +1,10 @@
+[Unit]
+Description=Run PR preview reconciler for %i every few minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+RandomizedDelaySec=20
+
+[Install]
+WantedBy=timers.target
